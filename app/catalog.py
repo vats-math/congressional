@@ -14,12 +14,12 @@ OPPORTUNITY_TYPES = (
 )
 
 TYPE_COLORS = {
-    "school": "#2F9E7A",
-    "college": "#4C6EF5",
-    "recreation": "#0B8A8A",
-    "nonprofit": "#D4A017",
-    "club": "#E36B5B",
-    "national": "#7B61FF",
+    "school": "#DDFFF7",
+    "college": "#93E1d8",
+    "recreation": "#FFA69E",
+    "nonprofit": "#AA4465",
+    "club": "#462255",
+    "national": "#FF577F",
 }
 
 
