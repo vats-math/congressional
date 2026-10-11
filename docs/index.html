@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PlayPath</title>
+    <meta name="description" content="Match girls and women with real sports opportunities from schools, colleges, rec programs, nonprofits, and clubs." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Outfit:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="vendor/leaflet.css" />
+    <link rel="stylesheet" href="vendor/MarkerCluster.css" />
+    <link rel="stylesheet" href="vendor/MarkerCluster.Default.css" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="app-pages.css" />
+  </head>
+  <body>
+    <header class="nav" id="nav"></header>
+    <main id="view" class="shell" tabindex="-1"></main>
+    <footer class="foot shell">
+      PlayPath · Congressional App Challenge · Listings come from public program
+      pages. Costs and deadlines are typical published ranges, so always confirm
+      on the official site. Runs entirely in your browser.
+    </footer>
+    <script src="vendor/leaflet.js"></script>
+    <script src="vendor/leaflet.markercluster.js"></script>
+    <script src="vendor/leaflet-heat.js"></script>
+    <script src="data.js"></script>
+    <script>window.TYPE_COLORS = window.PLAYPATH_DATA.typeColors;</script>
+    <script src="engine.js"></script>
+    <script src="local-api.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

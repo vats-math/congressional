@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PlayPath</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Outfit:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/vendor/leaflet.css" />
+    <link rel="stylesheet" href="/static/vendor/MarkerCluster.css" />
+    <link rel="stylesheet" href="/static/vendor/MarkerCluster.Default.css" />
+    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/app-pages.css" />
+  </head>
+  <body>
+    <header class="nav" id="nav"></header>
+    <main id="view" class="shell" tabindex="-1"></main>
+    <footer class="foot shell">
+      PlayPath · Congressional App Challenge · Listings come from public program
+      pages. Costs and deadlines are typical published ranges, so always confirm
+      on the official site.
+    </footer>
+    <script>
+      window.TYPE_COLORS = {{ type_colors | tojson }};
+    </script>
+    <script src="/static/vendor/leaflet.js"></script>
+    <script src="/static/vendor/leaflet.markercluster.js"></script>
+    <script src="/static/vendor/leaflet-heat.js"></script>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
