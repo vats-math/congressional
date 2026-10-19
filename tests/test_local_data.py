@@ -10,7 +10,7 @@ from app.local_data import (LOCAL_DIR, fetch_programs, load_local, parse_clock, 
                             parse_weekday)
 
 LOC_HEADER = "location_id,name,address,city,region,country,lat,lng\n"
-LOC_OK = "park,Test Park,1 Main St,Testville,TS,United States,33.7,-84.3\n"
+LOC_OK = "park,Test Park,1 Main St,Testville,TS,United States,34.2,-84.1\n"
 PROG_HEADER = ("id,name,organization,website,type,sport,location_id,min_age,max_age,skill_levels,cost_usd,"
                "stage,environment,status,status_note,last_verified,source_url,description\n")
 GOOD = ("clinic,Test Clinic,Test Parks,https://x.org,recreation,tennis,park,12,18,beginner,0,"
@@ -62,7 +62,7 @@ def test_load_and_fetch(tmp_db):
     assert c["stage"] == "intro_clinic" and c["status"] == "open" and c["source_url"] == "https://x.org/src"
     assert c["environment"] == ["beginner_friendly", "drop_in"]
     assert c["last_verified"] == "2026-05-01" and c["last_checked"] == "2026-05-01"
-    assert (c["lat"], c["lng"], c["city"]) == (33.7, -84.3, "Testville")  # inherited from the location
+    assert (c["lat"], c["lng"], c["city"]) == (34.2, -84.1, "Testville")  # inherited from the location
     assert c["cost_usd"] == 0
     assert [(s["weekday"], s["start_minute"], s["end_minute"], s["drop_in"]) for s in c["sessions"]] == [
         (1, 990, 1050, True), (3, 1020, 1080, False)]
@@ -150,3 +150,59 @@ def test_shipped_forsyth_data_loads_once_coordinates_exist(tmp_db):
     # a spot check straight from the source page: Matt Community Park U12 Girls, Tue/Thu 6:30-7:30 PM
     s = programs["ufa-rec-matt-park-u12g"]["sessions"]
     assert [(x["weekday"], x["start_minute"], x["end_minute"]) for x in s] == [(1, 1110, 1170), (3, 1110, 1170)]
+
+
+
+
+
+def test_row_with_extra_cells_is_reported_not_a_crash(tmp_db):
+    broken = GOOD.replace("A clinic", "A clinic, with an unquoted comma")  # 19 cells under an 18-column header
+    report = load_local(**files(tmp_db, programs=PROG_HEADER + broken))
+    assert report["programs"] == 0
+    assert any("extra cell" in p and "p.csv line 2" in p for p in report["problems"])
+
+
+def test_extra_columns_are_reported_not_a_crash(tmp_db):
+    # exactly the mistake of typing coordinates after the last column: ...,,,34.47, -84.15
+    locations = LOC_HEADER + "park,Test Park,1 Main St,Testville,TS,United States,,,34.47, -84.15\n"
+    report = load_local(**files(tmp_db, locations=locations))
+    assert report["programs"] == 0
+    assert any("extra cell" in p for p in report["problems"])
+
+
+def test_coordinates_outside_forsyth_are_rejected(tmp_db):
+    locations = LOC_HEADER + "park,Test Park,1 Main St,Testville,TS,United States,34.4736,-84.152\n"
+    report = load_local(**files(tmp_db, locations=locations))
+    assert report["programs"] == 0
+    assert any("outside Forsyth County" in p for p in report["problems"])
+
+
+def test_login_sessions_table_is_untouched(tmp_db):
+    """app/auth.py owns a table called `sessions`; loading program data must not clash with it."""
+    from app import auth
+
+    load_local(**files(tmp_db))
+    auth.init_auth()
+    conn = db.connect()
+    try:
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(sessions)")]
+    finally:
+        conn.close()
+    assert "opportunity_id" not in cols and "token" in cols
+
+
+def test_database_with_the_old_wrong_table_is_healed(tmp_db):
+    conn = db.connect()
+    conn.execute("CREATE TABLE sessions (opportunity_id TEXT, weekday INTEGER, start_minute INTEGER, "
+                 "end_minute INTEGER, drop_in INTEGER)")
+    conn.commit()
+    conn.close()
+    from app import auth
+
+    assert load_local(**files(tmp_db))["loaded"]
+    auth.init_auth()
+    conn = db.connect()
+    try:
+        assert "token" in [r[1] for r in conn.execute("PRAGMA table_info(sessions)")]
+    finally:
+        conn.close()

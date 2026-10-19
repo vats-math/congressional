@@ -3,7 +3,8 @@
 The existing `opportunities` table is left alone. Three things live beside it:
 
     program_extras  one row per program: pathway stage, environment tags, last_verified
-    sessions        one row per weekly meeting time (weekday + start/end minutes)
+    program_sessions  one row per weekly meeting time (weekday + start/end minutes)
+                      (NOT named 'sessions': auth.py already uses that name for logins)
 
 Source of truth is three CSVs you edit in a spreadsheet:
 
@@ -39,6 +40,8 @@ LOCAL_SOURCE = "local"
 # Fields the generic pipeline would guess at. For hand-collected data we refuse to guess.
 # cost_usd is NOT required: a blank cost means "not published / not verified" and is stored as NULL.
 MUST_HAVE = ("id", "stage", "location_id", "min_age", "max_age", "last_verified", "source_url")
+# Rough box around Forsyth County, GA. A coordinate outside it is almost certainly a typo or a wrong pin.
+SERVICE_LAT, SERVICE_LNG = (34.0, 34.45), (-84.35, -83.85)
 STATUSES = ("open", "closed", "upcoming", "unknown")  # is she able to sign up right now?
 
 SCHEMA = """
@@ -59,7 +62,7 @@ CREATE TABLE IF NOT EXISTS program_sessions (
     drop_in INTEGER NOT NULL DEFAULT 0,
     CHECK (end_minute > start_minute)
 );
-CREATE INDEX IF NOT EXISTS idx_sessions_opp ON program_sessions(opportunity_id);
+CREATE INDEX IF NOT EXISTS idx_program_sessions_opp ON program_sessions(opportunity_id);
 """
 
 
@@ -95,6 +98,7 @@ def parse_environment(text: str) -> tuple[list[str], list[str]]:
     bad = [t for t in tags if t not in ENVIRONMENT_TAGS]
     return sorted(set(good)), bad
 
+
 def _read_csv(path: Path, problems: list[str] | None = None) -> list[dict[str, str]]:
     """Read a CSV into dicts. A row with more values than headers is skipped and reported, not fatal."""
     if not path.exists():
@@ -115,7 +119,6 @@ def _read_csv(path: Path, problems: list[str] | None = None) -> list[dict[str, s
     return rows
 
 
-
 # ---------------------------------------------------------------- validation
 
 def validate_locations(raw: list[dict[str, str]]) -> tuple[dict[str, dict[str, Any]], list[str]]:
@@ -132,8 +135,9 @@ def validate_locations(raw: list[dict[str, str]]) -> tuple[dict[str, dict[str, A
         except ValueError:
             problems.append(f"locations.csv line {line} ({lid}): lat/lng not filled in yet - programs here are skipped")
             continue
-        if not (-90 <= lat <= 90 and -180 <= lng <= 180):
-            problems.append(f"locations.csv line {line} ({lid}): coordinates out of range")
+        if not (SERVICE_LAT[0] <= lat <= SERVICE_LAT[1] and SERVICE_LNG[0] <= lng <= SERVICE_LNG[1]):
+            problems.append(f"locations.csv line {line} ({lid}): {lat}, {lng} is outside Forsyth County - "
+                            f"check lat/lng (latitude first, longitude second) - programs here are skipped")
             continue
         out[lid] = {**r, "lat": lat, "lng": lng}
     return out, problems
@@ -216,6 +220,7 @@ def validate_sessions(raw: list[dict[str, str]], known_ids: set[str],
 
 
 # ---------------------------------------------------------------- loading
+
 def _ensure_schema(conn: sqlite3.Connection) -> None:
     """Create the tables, and add columns to an older program_extras (CREATE IF NOT EXISTS won't)."""
     # An earlier version created a table called `sessions`, which belongs to auth.py (logins). Remove ours.
@@ -227,12 +232,14 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         if col not in have:
             default = "'unknown'" if col == "status" else "''"
             conn.execute(f"ALTER TABLE program_extras ADD COLUMN {col} TEXT NOT NULL DEFAULT {default}")
-            
+
+
 def load_local(programs_path: Path = PROGRAMS_CSV, sessions_path: Path = SESSIONS_CSV,
                locations_path: Path = LOCATIONS_CSV, dry_run: bool = False) -> dict[str, Any]:
     """Validate the CSVs and (unless dry_run) replace all local data in SQLite. Never raises on bad rows."""
-    locations, problems = validate_locations(_read_csv(locations_path))
-    program_rows = _read_csv(programs_path)
+    read_problems: list[str] = []
+    locations, problems = validate_locations(_read_csv(locations_path, read_problems))
+    program_rows = _read_csv(programs_path, read_problems)
     records, extras, prob = validate_programs(program_rows, locations)
     problems += prob
     result = run_pipeline(records)
@@ -246,8 +253,8 @@ def load_local(programs_path: Path = PROGRAMS_CSV, sessions_path: Path = SESSION
                 row["cost_label"] = "See website"
     kept = {r["id"] for r in rows}
     skipped = {r.get("id", "") for r in program_rows} - kept
-    sessions, session_problems = validate_sessions(_read_csv(sessions_path), kept, skipped)
-    problems += session_problems
+    sessions, session_problems = validate_sessions(_read_csv(sessions_path, read_problems), kept, skipped)
+    problems = read_problems + problems + session_problems
 
     report = {"programs": len(rows), "sessions": len(sessions), "problems": problems, "loaded": False}
     if dry_run:
@@ -260,7 +267,7 @@ def load_local(programs_path: Path = PROGRAMS_CSV, sessions_path: Path = SESSION
         # The CSVs are the source of truth, so wipe previous local data first.
         old = [r[0] for r in conn.execute("SELECT id FROM opportunities WHERE source = ?", (LOCAL_SOURCE,))]
         conn.executemany("DELETE FROM program_extras WHERE opportunity_id = ?", [(i,) for i in old])
-        conn.executemany("	DELETE FROM program_sessions WHERE opportunity_id = ?", [(i,) for i in old])
+        conn.executemany("DELETE FROM program_sessions WHERE opportunity_id = ?", [(i,) for i in old])
         conn.execute("DELETE FROM opportunities WHERE source = ?", (LOCAL_SOURCE,))
         conn.commit()
     finally:

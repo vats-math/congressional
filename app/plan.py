@@ -25,7 +25,7 @@ TRAVEL_COMPETITIONS = {"club_travel", "tournaments", "college_recruiting"}
 # How far a weekly practice can realistically be, by how the athlete gets there (miles).
 TRANSPORT_WEEKLY_MI = {"bike_walk": 5, "transit": 15, "carpool": 30, "parent": 40, "car": 40}
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-TIMES = {"morning": "Morning (7–11 am)", "afternoon": "Afternoon (12–4 pm)", "evening": "Evening (5–8 pm)"}
+TIMES = {"morning": "Morning (7 am–12 pm)", "afternoon": "Afternoon (12–5 pm)", "evening": "Evening (5–9 pm)"}  # keep in sync with SLOT_WINDOWS in fit.py
 KM_PER_MI = 1.60934
 
 

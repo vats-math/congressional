@@ -11,7 +11,8 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from app import auth
-from app.local_data import load_local
+from app.fit import fit_catalog
+from app.local_data import fetch_programs, load_local
 from app.analysis import affordability_index, analyze
 from app.catalog import TYPE_COLORS
 from app.db import fetch_all, init_db
@@ -158,6 +159,7 @@ class Quiz(BaseModel):
     barriers: list[str] = Field(default_factory=list)
     goal_level: Optional[str] = None
     goal_text: str = Field(default="", max_length=500)
+    ride_cutoff: Optional[str] = Field(default=None, max_length=8)  # latest time she can get a ride, e.g. "8:00 PM"
 
 
 class AccountUpdate(BaseModel):
@@ -239,6 +241,10 @@ def plan(body: Quiz) -> dict[str, Any]:
     """Works for guests (profile kept in the browser) and signed-in users alike."""
     return build_plan(body.model_dump(), fetch_all())
 
+@app.post("/api/fit")
+def fit(body: Quiz) -> dict[str, Any]:
+    """OpenPlay scoring: hard filters, then a weighted fit score with a per-factor breakdown."""
+    return fit_catalog(body.model_dump(), fetch_programs())
 
 @app.post("/api/opportunity/{opp_id}")
 def opportunity(opp_id: str, body: Quiz) -> dict[str, Any]:
