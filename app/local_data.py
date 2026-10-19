@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS program_extras (
     status_note TEXT NOT NULL DEFAULT '',
     source_url TEXT NOT NULL DEFAULT ''
 );
-CREATE TABLE IF NOT EXISTS sessions (
+CREATE TABLE IF NOT EXISTS program_sessions (
     opportunity_id TEXT NOT NULL,
     weekday INTEGER NOT NULL CHECK (weekday BETWEEN 0 AND 6),
     start_minute INTEGER NOT NULL CHECK (start_minute BETWEEN 0 AND 1439),
@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     drop_in INTEGER NOT NULL DEFAULT 0,
     CHECK (end_minute > start_minute)
 );
-CREATE INDEX IF NOT EXISTS idx_sessions_opp ON sessions(opportunity_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_opp ON program_sessions(opportunity_id);
 """
 
 
@@ -95,17 +95,25 @@ def parse_environment(text: str) -> tuple[list[str], list[str]]:
     bad = [t for t in tags if t not in ENVIRONMENT_TAGS]
     return sorted(set(good)), bad
 
-
-def _read_csv(path: Path) -> list[dict[str, str]]:
+def _read_csv(path: Path, problems: list[str] | None = None) -> list[dict[str, str]]:
+    """Read a CSV into dicts. A row with more values than headers is skipped and reported, not fatal."""
     if not path.exists():
         return []
+    rows: list[dict[str, str]] = []
     with path.open(newline="", encoding="utf-8-sig") as fh:  # utf-8-sig: Excel adds a BOM
-        rows = []
-        for r in csv.DictReader(fh):
+        reader = csv.DictReader(fh)
+        for r in reader:
+            if None in r:  # DictReader stores surplus values under the key None
+                if problems is not None:
+                    problems.append(f"{path.name} line {reader.line_num}: has extra cell(s) beyond the header "
+                                    f"(a stray comma? each value needs its own column; quote text that contains "
+                                    f"commas) - row skipped")
+                continue
             r = {(k or "").strip(): (v or "").strip() for k, v in r.items()}
             if any(r.values()):  # skip blank spreadsheet rows
                 rows.append(r)
-        return rows
+    return rows
+
 
 
 # ---------------------------------------------------------------- validation
@@ -208,17 +216,18 @@ def validate_sessions(raw: list[dict[str, str]], known_ids: set[str],
 
 
 # ---------------------------------------------------------------- loading
-
 def _ensure_schema(conn: sqlite3.Connection) -> None:
     """Create the tables, and add columns to an older program_extras (CREATE IF NOT EXISTS won't)."""
+    # An earlier version created a table called `sessions`, which belongs to auth.py (logins). Remove ours.
+    if "opportunity_id" in {r[1] for r in conn.execute("PRAGMA table_info(sessions)")}:
+        conn.execute("DROP TABLE sessions")
     conn.executescript(SCHEMA)
     have = {r[1] for r in conn.execute("PRAGMA table_info(program_extras)")}
     for col in ("status", "status_note", "source_url"):
         if col not in have:
             default = "'unknown'" if col == "status" else "''"
             conn.execute(f"ALTER TABLE program_extras ADD COLUMN {col} TEXT NOT NULL DEFAULT {default}")
-
-
+            
 def load_local(programs_path: Path = PROGRAMS_CSV, sessions_path: Path = SESSIONS_CSV,
                locations_path: Path = LOCATIONS_CSV, dry_run: bool = False) -> dict[str, Any]:
     """Validate the CSVs and (unless dry_run) replace all local data in SQLite. Never raises on bad rows."""
@@ -251,7 +260,7 @@ def load_local(programs_path: Path = PROGRAMS_CSV, sessions_path: Path = SESSION
         # The CSVs are the source of truth, so wipe previous local data first.
         old = [r[0] for r in conn.execute("SELECT id FROM opportunities WHERE source = ?", (LOCAL_SOURCE,))]
         conn.executemany("DELETE FROM program_extras WHERE opportunity_id = ?", [(i,) for i in old])
-        conn.executemany("DELETE FROM sessions WHERE opportunity_id = ?", [(i,) for i in old])
+        conn.executemany("	DELETE FROM program_sessions WHERE opportunity_id = ?", [(i,) for i in old])
         conn.execute("DELETE FROM opportunities WHERE source = ?", (LOCAL_SOURCE,))
         conn.commit()
     finally:
@@ -269,7 +278,7 @@ def load_local(programs_path: Path = PROGRAMS_CSV, sessions_path: Path = SESSION
               e["source_url"]) for i, e in extras.items() if i in kept],
         )
         conn.executemany(
-            "INSERT INTO sessions VALUES (:opportunity_id, :weekday, :start_minute, :end_minute, :drop_in)",
+            "INSERT INTO program_sessions VALUES (:opportunity_id, :weekday, :start_minute, :end_minute, :drop_in)",
             sessions,
         )
         conn.commit()
@@ -293,7 +302,7 @@ def fetch_programs() -> list[dict[str, Any]]:
         _ensure_schema(conn)
         extras = {r["opportunity_id"]: r for r in conn.execute("SELECT * FROM program_extras")}
         by_program: dict[str, list[dict[str, Any]]] = {}
-        for s in conn.execute("SELECT * FROM sessions ORDER BY weekday, start_minute"):
+        for s in conn.execute("SELECT * FROM program_sessions ORDER BY weekday, start_minute"):
             by_program.setdefault(s["opportunity_id"], []).append({
                 "weekday": s["weekday"],
                 "start_minute": s["start_minute"],
