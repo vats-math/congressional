@@ -1,0 +1,10 @@
+location_id,name,address,city,region,country,lat,lng,coord_source
+central-park,Central Park (Forsyth County Parks & Recreation),"2300 Keith Bridge Rd, Cumming, GA 30040",Cumming,Georgia,United States,,,Run scripts/geocode_locations.py to fill lat/lng from the address
+fowler-park,Fowler Park (Forsyth County Parks & Recreation),"4110 Carolene Way, Cumming, GA 30040",Cumming,Georgia,United States,34.151497,-84.210497,Team Google Maps pin
+matt-park,Matt Community Park (Forsyth County Parks & Recreation),"6555 Wallace Tatum Rd, Cumming, GA 30028",Cumming,Georgia,United States,34.296702,-84.181034,Team Google Maps pin
+polo-fields,Polo Fields (Forsyth County),"6050 Majors Rd, Cumming, GA 30040",Cumming,Georgia,United States,34.184668,-84.216968,Team Google Maps pin
+sf-soccer-complex,South Forsyth Soccer Complex,"800 Kemp Rd, Suwanee, GA 30024",Suwanee,Georgia,United States,34.052968,-84.118309,Team Google Maps pin
+sharon-springs-park,Sharon Springs Park (Forsyth County),"1950 Sharon Rd, Cumming, GA 30041",Cumming,Georgia,United States,34.116421,-84.164103,Team Google Maps pin
+nfms,North Forsyth Middle School,"3645 Coal Mountain Drive, Cumming, GA 30028",Cumming,Georgia,United States,34.277931,-84.103827,Team Google Maps pin
+crpd-cumming,City of Cumming Recreation & Parks Department,"437 Pilgrim Mill Rd, Cumming, GA 30040",Cumming,Georgia,United States,34.2109,-84.1339,ActiveNet listing for CRPD. Spot-check in Google Maps
+cumming-center,"Cumming, GA (site varies by school/program)","100 Main St, Cumming, GA 30040",Cumming,Georgia,United States,34.219649,-84.148317,Team Google Maps pin

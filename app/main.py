@@ -11,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from app import auth
+from app.local_data import load_local
 from app.analysis import affordability_index, analyze
 from app.catalog import TYPE_COLORS
 from app.db import fetch_all, init_db
@@ -26,6 +27,7 @@ ROOT = Path(__file__).resolve().parent.parent
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    load_local()
     auth.init_auth()
     yield
 

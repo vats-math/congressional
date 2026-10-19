@@ -60,22 +60,6 @@ keyword relevance 5% · deadline 4% · program type 3%.
 
 Ineligible results are capped at 62. Programs that fail a residency rule are capped at 40.
 
-## Use it with no installs (GitHub Pages)
-
-The `docs/` folder is a complete version of the app that runs entirely in the browser,
-with no Python and no server. `docs/engine.js` is a JavaScript port of the parser,
-ranking, recommender, analysis, and plan code, and `docs/data.js` holds the catalog.
-
-- **Open locally:** double-click `docs/index.html`.
-- **Publish:** in the repo, go to Settings → Pages → Build and deployment → Source:
-  "Deploy from a branch", Branch: `main`, folder `/docs` → Save. The site appears
-  at `https://<owner>.github.io/<repo>/` after about a minute.
-
-Differences from the Python app: accounts are stored in that browser's localStorage
-only, so they don't sync across devices. After changing the catalog or `static/app.js`,
-rebuild with `python scripts/export_static.py`. A test checks that the JS engine's
-scores match Python's.
-
 ## Run the full Python app
 
 ```bash
