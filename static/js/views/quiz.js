@@ -1,5 +1,6 @@
 // The 9-question onboarding quiz. Answers are kept in state.quiz.draft until the last step saves them.
-import { BARRIERS, COMPETITIONS, LEVELS, SPORTS, TRANSPORT } from "../constants.js";
+import { BARRIERS, COMPETITIONS, DETECTED, LEVELS, SPORTS, TRANSPORT } from "../constants.js";
+import { api } from "../api.js";
 import { $, $$, checkedValues, esc, radioValue } from "../dom.js";
 import { blankProfile, saveProfile, state } from "../state.js";
 import { availabilityGrid, chip, homeField, wireHomeField } from "../ui.js";
@@ -59,11 +60,76 @@ const STEPS = [
   { title: "How will you get there?",
     render: (p) => `<div class="options three">${TRANSPORT.map(([v, label]) => `<label class="option center"><input type="radio" name="transport" value="${v}" ${p.transport === v ? "checked" : ""}/><span><b>${label}</b></span></label>`).join("")}</div>`,
     read: (r, p) => { p.transport = radioValue(r, "transport"); return p.transport ? null : "Choose how you'll usually travel."; } },
+  // Phase 5: her own words -> suggested barriers -> she confirms each one. Nothing is applied unless she says yes.
+  { title: "In your own words, what makes it hard to play?",
+    sub: "Optional. Write as much or as little as you want. You'll get to check what we picked up.",
+    render: (p) => `<textarea name="barrier_text" rows="4" maxlength="1000" placeholder="e.g. I haven't played in two years and tryouts make me nervous. I also don't have a ride on weekdays.">${esc(p._barrier_text || "")}</textarea>`,
+    read: (r, p) => { p._barrier_text = $("[name=barrier_text]", r).value.trim(); return null; },
+    // Runs after Next is pressed. Errors (no server, no AI key) just mean nothing is suggested.
+    next: async (p) => {
+      p._detected = null;
+      if (!p._barrier_text) return;
+      try {
+        p._detected = await api("/api/advisor/detect", { method: "POST", body: { message: p._barrier_text } });
+      } catch { p._detected = null; }
+    } },
+  { title: "Did we get that right?",
+    sub: "Only the ones you say yes to will change your matches.",
+    skip: (p) => !detectedItems(p).length,
+    render: (p) => `<div class="confirm-list">${detectedItems(p).map((d) => `
+      <fieldset class="confirm-item">
+        <legend>${esc(d.text)}</legend>
+        ${d.evidence ? `<p class="hint">You wrote: “${esc(d.evidence)}”</p>` : ""}
+        <div class="chips">${chip(`confirm-${d.key}`, "yes", "Yes", d.answer === "yes", "radio")}${chip(`confirm-${d.key}`, "no", "No", d.answer === "no", "radio")}</div>
+      </fieldset>`).join("")}</div>
+      ${p._detected?.source === "keywords" ? `<p class="hint">Picked up with simple keyword matching.</p>` : ""}`,
+    read: (r, p) => {
+      for (const d of detectedItems(p)) {
+        const answer = radioValue(r, `confirm-${d.key}`);
+        p._answers = { ...(p._answers || {}), [d.key]: answer };
+        if (d.key === "years") {
+          if (answer === "yes") p.years_since_played = Math.min(d.years, 3);
+        } else if (answer === "yes" && !p.barriers.includes(d.value)) {
+          p.barriers = [...p.barriers, d.value];
+        } else if (answer === "no" && p._added?.includes(d.value)) {
+          p.barriers = p.barriers.filter((b) => b !== d.value);
+        }
+        if (answer === "yes" && d.value) p._added = [...new Set([...(p._added || []), d.value])];
+      }
+      return null;
+    } },
   { title: "Anything that makes playing harder? And what's your goal?", sub: "Optional. This helps us suggest the right programs.",
     render: (p) => `<div class="chips">${BARRIERS.map(([v, l]) => chip("barriers", v, l, p.barriers.includes(v))).join("")}</div>
       <label class="stack">My goal is to reach…<select name="goal_level"><option value="">Just have fun / not sure</option>${LEVELS.map(([v, l]) => `<option value="${v}" ${p.goal_level === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>`,
     read: (r, p) => { p.barriers = checkedValues(r, "barriers"); p.goal_level = $("[name=goal_level]", r).value || null; return null; } },
 ];
+
+// Turn the advisor's answer into the list of things to confirm (barriers, plus a break length if it found one).
+function detectedItems(p) {
+  const det = p._detected;
+  if (!det) return [];
+  const items = (det.barriers || []).filter((b) => DETECTED[b.tag]).map((b) => ({
+    key: b.tag, value: DETECTED[b.tag].value, text: DETECTED[b.tag].text, evidence: b.evidence, answer: p._answers?.[b.tag] ?? null,
+  }));
+  if (det.years_since_played != null) {
+    const n = det.years_since_played;
+    items.push({ key: "years", years: n, text: `It sounds like it's been about ${n} year${n === 1 ? "" : "s"} since you last played.`,
+      evidence: null, answer: p._answers?.years ?? null });
+  }
+  return items;
+}
+
+// Next/previous step index, jumping over steps that don't apply (e.g. nothing to confirm).
+function move(q, dir) {
+  let i = q.step + dir;
+  while (STEPS[i]?.skip?.(q.draft)) i += dir;
+  return Math.max(0, Math.min(STEPS.length - 1, i));
+}
+
+// Drop the scratch fields (her raw message, detection results) before saving. Only confirmed barriers are kept.
+function cleaned(draft) {
+  return Object.fromEntries(Object.entries(draft).filter(([k]) => !k.startsWith("_")));
+}
 
 export function html() {
   const q = state.quiz;
@@ -87,13 +153,18 @@ export function after() {
   const form = $("#quiz-form");
   const step = STEPS[q.step];
   step.after?.(form, q.draft);
-  $("#quiz-back")?.addEventListener("click", () => { step.read(form, q.draft); q.step--; state.rerender(); });
+  $("#quiz-back")?.addEventListener("click", () => { step.read(form, q.draft); q.step = move(q, -1); state.rerender(); });
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const err = step.read(form, q.draft);
     if (err) { $("#quiz-error").textContent = err; return; }
-    if (q.step < STEPS.length - 1) { q.step++; state.rerender(); return; }
-    await saveProfile(q.draft);
+    if (step.next) {
+      const btn = $("button[type=submit]", form);
+      btn.disabled = true; btn.textContent = "Reading…";
+      await step.next(q.draft);
+    }
+    if (q.step < STEPS.length - 1) { q.step = move(q, 1); state.rerender(); return; }
+    await saveProfile(cleaned(q.draft));
     q.draft = null;
     location.hash = "#/dashboard";
   });

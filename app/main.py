@@ -420,7 +420,9 @@ def simulate(body: SimulateRequest) -> dict[str, Any]:
     quiz = body.quiz.model_dump()
     overrides = body.overrides.model_dump(exclude_unset=True)
     simulated_quiz = {**quiz, **overrides}
-    rows = fetch_all()
+    # Same program list as /api/plan (includes pathway stages and real session times), so the
+    # what-if numbers match the dashboard.
+    rows = fetch_programs()
     baseline_plan = build_plan(quiz, rows)
     simulated_plan = build_plan(simulated_quiz, rows)
     baseline_programs = _programs_by_id(baseline_plan)

@@ -248,3 +248,12 @@ label.stack { display: grid; gap: var(--space-1); font-size: 14px; font-weight: 
 .settings form, .auth form, .explore-form { background: none; border: 0; padding: 0; border-radius: 0; }
 .chip span { text-transform: none; }
 .chips.grid4 .chip span { text-transform: capitalize; }
+
+/* Phase 5: barrier confirmation and AI summary */
+.confirm-list { display: grid; gap: var(--space-3); }
+.confirm-item { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-3) var(--space-4); margin: 0; background: var(--card); }
+.confirm-item legend { font-weight: 600; padding: 0 var(--space-1); }
+.confirm-item .hint { margin: 0 0 var(--space-2); }
+.ai-summary { border-left: 4px solid var(--seafoam); }
+.ai-summary p { margin: 0 0 var(--space-2); line-height: 1.5; }
+.ai-label { display: inline-block; font-size: 12px; font-weight: 600; color: var(--plum); background: var(--tint); border-radius: var(--radius-sm); padding: 2px var(--space-2); }

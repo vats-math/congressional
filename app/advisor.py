@@ -300,57 +300,66 @@ def detect_barriers(message: str) -> dict:
 
 # ---------- ranking ----------
 
+# Which program environment tags help or hurt each barrier. Only tags that exist in the data are used
+# (app/stages.py ENVIRONMENT_TAGS), otherwise a rule can never match and silently does nothing.
+# A barrier with no matching tags (transport, time) is handled by other factors: distance, schedule.
 BARRIER_TAGS = {
     "experience": {
-        "boost": ["beginner_friendly", "no_tryouts", "instruction", "drop_in"],
-        "avoid": ["tryout_required", "elite_only"],
+        "boost": ["beginner_friendly", "no_tryouts", "drop_in"],
+        "avoid": ["tryout_required"],
     },
     "confidence": {
         "boost": ["beginner_friendly", "no_tryouts", "girls_only", "drop_in"],
         "avoid": ["tryout_required"],
     },
     "social": {
-        "boost": ["girls_only", "small_group", "community", "friends_welcome"],
-        "avoid": ["tryout_required"],
+        "boost": ["girls_only", "beginner_friendly", "drop_in"],
+        "avoid": [],
     },
     "cost": {
-        "boost": ["free", "low_cost", "financial_aid", "scholarship"],
-        "avoid": ["high_cost"],
-    },
-    "transport": {
-        "boost": ["local", "transit_accessible", "carpool"],
-        "avoid": ["travel_required"],
+        "boost": ["free_or_aid"],
+        "avoid": [],
     },
     "time": {
-        "boost": ["flexible_schedule", "drop_in", "short_season"],
-        "avoid": ["year_round_commitment"],
+        "boost": ["drop_in"],
+        "avoid": [],
     },
     "environment": {
-        "boost": ["supportive_coaching", "girls_only", "inclusive", "women_coached"],
-        "avoid": ["high_pressure"],
+        "boost": ["girls_only", "beginner_friendly"],
+        "avoid": ["tryout_required"],
     },
     "family": {
-        "boost": ["family_friendly", "flexible_schedule", "low_cost"],
-        "avoid": ["travel_required", "year_round_commitment"],
+        "boost": ["drop_in", "free_or_aid"],
+        "avoid": ["parent_required"],
     },
     "injury": {
-        "boost": ["low_contact", "adaptive", "rehab_friendly", "beginner_friendly"],
-        "avoid": ["high_contact"],
+        "boost": ["adaptive", "beginner_friendly"],
+        "avoid": [],
+    },
+    "disability": {
+        "boost": ["adaptive"],
+        "avoid": [],
     },
 }
+# The quiz's checkbox names that mean the same thing as an advisor tag.
+BARRIER_ALIASES = {"new_to_sport": "experience"}
 
 
-def environment_score(program_tags: list[str], barriers: list[str]) -> float:
-    """0..1 fit between a program's tags and the barriers the student confirmed.
-    0.5 is neutral, which is what you get with no barriers or no matching tags."""
-    active = [b for b in barriers if b in BARRIER_TAGS]
-    if not active:
-        return 0.5
+def environment_score(program_tags: list[str], barriers: list[str]) -> float | None:
+    """0..1 fit between a program's environment tags and the barriers she confirmed.
+
+    None when none of her barriers has a tag rule (nothing to judge), so the caller can leave the factor out.
+    Per barrier: start at 0.5, +0.5 if the program has any boost tag (more tags, more credit), -0.5 if it has an avoid tag.
+    """
+    active = {BARRIER_ALIASES.get(b, b) for b in barriers or []}
+    rules = [BARRIER_TAGS[b] for b in sorted(active) if b in BARRIER_TAGS]
+    if not rules:
+        return None
     tags = set(program_tags or [])
     scores = []
-    for b in active:
-        rule = BARRIER_TAGS[b]
-        helped = len(tags & set(rule["boost"])) / len(rule["boost"])
+    for rule in rules:
+        boost = rule["boost"]
+        helped = min(1.0, len(tags & set(boost)) / min(2, len(boost))) if boost else 0.0
         hurt = 1.0 if tags & set(rule["avoid"]) else 0.0
         scores.append(max(0.0, min(1.0, 0.5 + 0.5 * helped - 0.5 * hurt)))
     return sum(scores) / len(scores)

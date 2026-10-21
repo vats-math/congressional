@@ -42,5 +42,21 @@ export const TRANSPORT = [
 export const BARRIERS = [
   ["cost", "Cost is a concern"], ["transport", "Getting there is hard"], ["time", "Limited free time"],
   ["disability", "I have a disability / want adaptive sport"], ["new_to_sport", "I'm new to the sport"],
-  ["confidence", "I'm nervous about joining"],
+  ["confidence", "I'm nervous about joining"], ["social", "I don't know anyone there"],
+  ["environment", "A past team didn't feel welcoming"], ["family", "Family responsibilities"],
+  ["injury", "Coming back from an injury"],
 ];
+
+// What the advisor (app/advisor.py) can detect in her own words, and how we ask her to confirm it.
+// `value` is the quiz barrier it turns into once she says yes.
+export const DETECTED = {
+  experience: { value: "new_to_sport", text: "It sounds like you're new to the sport or coming back after a break." },
+  confidence: { value: "confidence", text: "It sounds like trying out feels intimidating." },
+  social: { value: "social", text: "It sounds like you're worried about not knowing anyone." },
+  cost: { value: "cost", text: "It sounds like cost is a worry." },
+  transport: { value: "transport", text: "It sounds like getting there is hard." },
+  time: { value: "time", text: "It sounds like your schedule is tight." },
+  environment: { value: "environment", text: "It sounds like a past team didn't feel welcoming." },
+  family: { value: "family", text: "It sounds like family responsibilities make it harder." },
+  injury: { value: "injury", text: "It sounds like you're dealing with an injury." },
+};

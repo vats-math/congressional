@@ -29,6 +29,11 @@ export async function after() {
       <div class="dash-actions"><a class="btn ghost small" href="#/settings">Edit answers</a><a class="btn small" href="#/simulate">Try a what-if</a><a class="btn small" href="#/explore">Open map</a></div>
     </div>
     <div class="dash-grid">
+      <div class="panel span3 ai-summary" id="ai-summary" hidden>
+        <p class="ai-label">AI summary</p>
+        <p id="ai-summary-text" class="loading">Writing a short summary of your plan…</p>
+        <p class="hint">Written by an AI model from your plan's data only (not anything you typed). It can still make mistakes, so check the details below.</p>
+      </div>
       <div class="panel span2"><h2>This week</h2><div class="sessions">${sessions}</div></div>
       <div class="panel">
         <h2>Next step</h2>
@@ -42,4 +47,22 @@ export async function after() {
       <div class="panel"><h2>Upcoming events</h2>${plan.events.length ? `<div class="minis">${plan.events.map((m) => miniCard(m, `<span class="meta">Deadline ${esc(deadlineText(m))}</span>`)).join("")}</div>` : `<p class="empty">Choose “Tournaments” or “College recruiting” in your answers to see events.</p>`}</div>
     </div>`;
   wirePathway();
+  loadSummary();
+}
+
+// Phase 5: 3-sentence summary from the model. The server sends it only the finished plan's facts.
+// If there's no API key or the answer fails the server's checks, the panel stays hidden.
+async function loadSummary() {
+  const box = $("#ai-summary");
+  if (!box) return;
+  box.hidden = false;
+  try {
+    const { summary } = await api("/api/plan/summary", { method: "POST", body: state.profile });
+    if (!summary) { box.hidden = true; return; }
+    const text = $("#ai-summary-text");
+    text.classList.remove("loading");
+    text.textContent = summary;
+  } catch {
+    box.hidden = true;
+  }
 }

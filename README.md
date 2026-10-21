@@ -94,6 +94,32 @@ on the team can open a file and read it top to bottom.
 - **Free map tiles and geocoding** (CARTO, Esri, OpenStreetMap Nominatim). No API keys, but they
   are rate-limited.
 
+## Barriers (Phase 5)
+
+1. In the quiz she can describe, in her own words, what makes playing hard.
+2. `app/advisor.py` suggests barriers (AI through Groq if a key is set, keyword rules otherwise). Each suggestion
+   must quote her exact words.
+3. She confirms each one with **Yes / No**. Only confirmed barriers are used, and her message is not saved.
+4. Confirmed barriers add an **environment** factor (8% of the fit; every other weight shrinks by 8% so the total
+   stays 1). `BARRIER_TAGS` maps each barrier to program tags to boost and to avoid. For example, *confidence*
+   boosts `beginner_friendly`, `no_tryouts`, `girls_only`, `drop_in` and avoids `tryout_required`.
+5. The dashboard shows a 3-sentence **AI summary** written only from the finished plan's data. The server rejects
+   it if it isn't exactly 3 sentences or uses a number that isn't in the plan.
+
+### Advisor evaluation
+
+`data/eval/barrier_messages.csv` has 30 sample messages with the labels a person would expect.
+Run `python scripts/eval_advisor.py --show`.
+
+| Mode | Exact-match accuracy | Label precision | Label recall | F1 | Years-since-played |
+|---|---|---|---|---|---|
+| Keyword fallback | 83% | 97% | 85% | 0.91 | 100% |
+| AI (Groq) | *run with `GROQ_API_KEY` set and fill in* | | | | |
+
+**Caveat:** these 30 messages were written by the developers, who had seen the keyword list, so the keyword score
+is likely higher than it would be on messages from real users. Messages collected during user testing are the
+honest test. Add them to the CSV and re-run.
+
 ## User testing
 
 We tested with real athletes. Their quotes, and what we changed because of them, are in

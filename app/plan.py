@@ -84,6 +84,8 @@ def to_ranking_profile(quiz: dict[str, Any]) -> dict[str, Any]:
         "budget_usd": quiz.get("budget_usd"),
         "intent_types": [COMPETITION_TYPES[c] for c in comps if c in COMPETITION_TYPES] or None,
         "adaptive": "disability" in barriers or None,
+        # Confirmed barriers; ranking.py turns them into the "environment" factor.
+        "barriers": sorted(barriers) or None,
     }
     if quiz.get("max_distance_mi"):
         profile["max_distance_km"] = float(quiz["max_distance_mi"]) * KM_PER_MI

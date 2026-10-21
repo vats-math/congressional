@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.advisor import add_environment_weight, environment_score
 from app.catalog import ADAPTIVE_ONLY, scope_for
 from app.local_data import parse_clock
 from app.plan import COMPETITION_TYPES, KM_PER_MI, TRANSPORT_WEEKLY_MI, TRAVEL_COMPETITIONS
@@ -23,7 +24,7 @@ from app.ranking import (_affordability_score, _age_score, _clamp, _proximity_sc
                          _travel_score, _type_intent_score, haversine_km)
 from app.stages import WEEKDAY_NAMES, WEEKDAYS
 
-DEFAULT_WEIGHTS: dict[str, float] = {
+BASE_WEIGHTS: dict[str, float] = {
     "schedule": 0.25,
     "distance": 0.20,
     "budget": 0.15,
@@ -32,11 +33,16 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "competitive": 0.10,
     "age": 0.05,
 }
+# Phase 5: "environment" (do the program's tags suit the barriers she confirmed?) takes 8%, and every
+# other weight shrinks by 8% so the total is still 1. With no confirmed barriers the environment factor
+# is simply absent and combine() rescales the rest, so scores are unchanged for her.
+DEFAULT_WEIGHTS: dict[str, float] = add_environment_weight(BASE_WEIGHTS, share=0.08)
+assert abs(sum(DEFAULT_WEIGHTS.values()) - 1) < 1e-9
 
 FACTOR_LABELS = {
     "schedule": "fits your week", "distance": "close to you", "budget": "fits your budget",
     "experience": "right level", "transport": "easy to get to", "competitive": "right intensity",
-    "age": "right age group",
+    "age": "right age group", "environment": "suits what makes playing hard for you",
 }
 
 # What each availability choice in the quiz means, in minutes after midnight. The three windows touch,
@@ -238,6 +244,10 @@ def _factors(quiz: dict[str, Any], program: dict[str, Any]) -> tuple[dict[str, f
 
     if quiz.get("age") is not None:
         factors["age"] = _age_score(quiz["age"], program["min_age"], program["max_age"])[0]
+
+    env = environment_score(program.get("environment") or [], quiz.get("barriers") or [])
+    if env is not None:
+        factors["environment"] = env
     return factors, info
 
 

@@ -262,9 +262,9 @@ def rank_opportunity(
         "relevance": 0.5 if relevance is None else _clamp(relevance),
     }
 
-    barriers = profile.get("barriers") or []
-    if barriers:
-        factors["environment"] = environment_score(opp.get("tags") or [], barriers)
+    env = environment_score(opp.get("environment") or [], profile.get("barriers") or [])
+    if env is not None:
+        factors["environment"] = env
         weights = WEIGHTS
     else:
         weights = BASE_WEIGHTS
