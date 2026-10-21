@@ -1,0 +1,23 @@
+Phase 3: Pathway engine (plan.py)
+Goal: turn "here are the five levels" into "here is your route, with real programs."
+Define the map. A dictionary where each stage lists which stages can come next. Each connection carries weeks (typical time) and a ready_when text like "6+ sessions attended."
+Starting stage. Write a function that maps her experience to a stage. Include years_since_played: if it's more than 2 years, start one stage lower than her stated level.
+Goal stage. Map her goal and competitive preference to a target stage. For example, "recreational" ends at rec_league, and "make the school team" ends at school_team.
+Enumerate routes. With about 7 stages, you can list every path from start to goal using a simple recursive function (depth-first search). You don't need Dijkstra, because the graph is tiny.
+Fill each stage. For each stage on a route, take the best feasible program from Phase 2 whose stage matches. If none exists, mark the step as a gap.
+Score each route. Use the average fit of its filled steps, with a penalty per gap and a small penalty for extra length. Pick the best route.
+Return the pathway as an ordered list: stage, program (or gap), weeks, and the readiness note.
+Show the gaps honestly in the UI ("no beginner clinic near you yet"). It's useful data for your project's pitch about access.
+
+Phase 4: What-if simulator
+Goal: change one thing about her situation and see how the plan changes.
+Make build_plan pure. It should depend only on the quiz, the rows, and the weights, with no hidden state. It already mostly does.
+New endpoint in main.py: POST /api/simulate. It takes the quiz and an overrides dict like {"availability": ["Sat-morning"], "budget_usd": 150}.
+Inside the endpoint: copy the quiz, apply the overrides, and run build_plan on both versions.
+Diff the two plans. Compare the sets of program ids (gained and lost), the top fit score, and the pathway's total weeks.
+Sensitivity analysis (the standout):
+Make a list of single changes: add each day she marked unavailable, raise the budget in steps of $25, add 5 miles, change transport to a car.
+Loop through them, run the plan for each, and record how much the best score improved.
+Sort by improvement and return the top 3: "Adding Thursdays would raise your best match from 61 to 88."
+Frontend: add a #/simulate view with controls. Call the endpoint after she stops adjusting for about 300 ms (a debounce) so you don't fire a request on every slider tick.
+
