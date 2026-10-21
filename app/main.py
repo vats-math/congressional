@@ -11,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app import auth
+from app.advisor import detect_barriers, summarize_plan
 from app.fit import fit_catalog
 from app.local_data import fetch_programs, load_local
 from app.analysis import affordability_index, analyze
@@ -18,7 +19,14 @@ from app.catalog import TYPE_COLORS
 from app.db import fetch_all, init_db
 from app.parser import parse_query, resolve_home
 from app.pipeline import run as run_pipeline
-from app.plan import DAYS, TIMES, TRANSPORT_WEEKLY_MI, build_plan, pathway, to_ranking_profile
+from app.plan import (
+    DAYS,
+    TIMES,
+    TRANSPORT_WEEKLY_MI,
+    build_plan,
+    pathway,
+    to_ranking_profile,
+)
 from app.ranking import rank_catalog
 from app.recommender import TfidfIndex
 
@@ -60,7 +68,9 @@ def _enrich(row: dict[str, Any]) -> dict[str, Any]:
 
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request) -> Any:
-    return templates.TemplateResponse(request, "index.html", {"type_colors": TYPE_COLORS})
+    return templates.TemplateResponse(
+        request, "index.html", {"type_colors": TYPE_COLORS}
+    )
 
 
 @app.get("/api/health")
@@ -120,8 +130,14 @@ def similar(opp_id: str, k: int = 5) -> dict[str, Any]:
     return {
         "id": opp_id,
         "similar": [
-            {"id": i, "name": by_id[i]["name"], "city": by_id[i]["city"], "type": by_id[i]["type"],
-             "sport": by_id[i]["sport"], "similarity": round(s, 3)}
+            {
+                "id": i,
+                "name": by_id[i]["name"],
+                "city": by_id[i]["city"],
+                "type": by_id[i]["type"],
+                "sport": by_id[i]["sport"],
+                "similarity": round(s, 3),
+            }
             for i, s in pairs
         ],
     }
@@ -160,7 +176,13 @@ class Quiz(BaseModel):
     barriers: list[str] = Field(default_factory=list)
     goal_level: Optional[str] = None
     goal_text: str = Field(default="", max_length=500)
-    ride_cutoff: Optional[str] = Field(default=None, max_length=8)  # latest time she can get a ride, e.g. "8:00 PM"
+    ride_cutoff: Optional[str] = Field(
+        default=None, max_length=8
+    )  # latest time she can get a ride, e.g. "8:00 PM"
+
+
+class DetectIn(BaseModel):
+    message: str = Field(default="", max_length=1000)
 
 
 class SimulatorOverrides(BaseModel):
@@ -171,7 +193,9 @@ class SimulatorOverrides(BaseModel):
     availability: list[str] = Field(default_factory=list)
     budget_usd: Optional[int] = Field(default=None, ge=0)
     max_distance_mi: Optional[float] = Field(default=None, gt=0)
-    transport: Optional[Literal["car", "parent", "carpool", "transit", "bike_walk"]] = None
+    transport: Optional[Literal["car", "parent", "carpool", "transit", "bike_walk"]] = (
+        None
+    )
 
     @field_validator("availability")
     @classmethod
@@ -193,7 +217,11 @@ class AccountUpdate(BaseModel):
 
 def _set_session(response: Response, token: str) -> None:
     response.set_cookie(
-        auth.SESSION_COOKIE, token, httponly=True, samesite="lax", max_age=60 * 60 * 24 * 30
+        auth.SESSION_COOKIE,
+        token,
+        httponly=True,
+        samesite="lax",
+        max_age=60 * 60 * 24 * 30,
     )
 
 
@@ -225,7 +253,9 @@ def login(body: Credentials, response: Response) -> dict[str, Any]:
 
 
 @app.post("/api/auth/logout")
-def logout(response: Response, playpath_session: Optional[str] = Cookie(default=None)) -> dict[str, bool]:
+def logout(
+    response: Response, playpath_session: Optional[str] = Cookie(default=None)
+) -> dict[str, bool]:
     auth.logout(playpath_session)
     response.delete_cookie(auth.SESSION_COOKIE)
     return {"ok": True}
@@ -240,14 +270,18 @@ def me(playpath_session: Optional[str] = Cookie(default=None)) -> dict[str, Any]
 
 
 @app.put("/api/me")
-def update_me(body: AccountUpdate, playpath_session: Optional[str] = Cookie(default=None)) -> dict[str, Any]:
+def update_me(
+    body: AccountUpdate, playpath_session: Optional[str] = Cookie(default=None)
+) -> dict[str, Any]:
     user = _require_user(playpath_session)
     auth.update_account(user["id"], body.name)
     return {"user": auth.user_for(playpath_session)}
 
 
 @app.delete("/api/me")
-def delete_me(response: Response, playpath_session: Optional[str] = Cookie(default=None)) -> dict[str, bool]:
+def delete_me(
+    response: Response, playpath_session: Optional[str] = Cookie(default=None)
+) -> dict[str, bool]:
     user = _require_user(playpath_session)
     auth.delete_account(user["id"])
     response.delete_cookie(auth.SESSION_COOKIE)
@@ -255,7 +289,9 @@ def delete_me(response: Response, playpath_session: Optional[str] = Cookie(defau
 
 
 @app.put("/api/profile")
-def put_profile(body: Quiz, playpath_session: Optional[str] = Cookie(default=None)) -> dict[str, Any]:
+def put_profile(
+    body: Quiz, playpath_session: Optional[str] = Cookie(default=None)
+) -> dict[str, Any]:
     user = _require_user(playpath_session)
     auth.save_profile(user["id"], body.model_dump())
     return {"profile": body.model_dump()}
@@ -267,13 +303,33 @@ def plan(body: Quiz) -> dict[str, Any]:
     return build_plan(body.model_dump(), fetch_programs())
 
 
+# ---------- Phase 5: AI advisor ----------
+# Plain `def` (not `async def`) on purpose: advisor.py makes blocking HTTP calls,
+# and FastAPI runs plain `def` routes in a threadpool.
+
+
+@app.post("/api/advisor/detect")
+def advisor_detect(body: DetectIn) -> dict[str, Any]:
+    """Free text in, suggested barriers out. The frontend asks her to confirm each one."""
+    return detect_barriers(body.message)
+
+
+@app.post("/api/plan/summary")
+def plan_summary(body: Quiz) -> dict[str, Any]:
+    """Three-sentence AI summary of the plan. `summary` is None if the model or its checks fail."""
+    plan_data = build_plan(body.model_dump(), fetch_programs())
+    return {"summary": summarize_plan(plan_data)}
+
+
 def _pathway_total_weeks(plan_data: dict[str, Any]) -> Optional[int]:
     """Sum the weeks of the pathway steps that have a duration (the goal step itself has none).
 
     None when no step has a duration, so the UI can say "unknown" instead of showing 0.
     """
     steps = plan_data.get("pathway") or []
-    durations = [step["weeks"] for step in steps if isinstance(step.get("weeks"), (int, float))]
+    durations = [
+        step["weeks"] for step in steps if isinstance(step.get("weeks"), (int, float))
+    ]
     return int(sum(durations)) if durations else None
 
 
@@ -302,13 +358,22 @@ def _sensitivity_suggestions(
     # available day with all three windows.
     for day in DAYS:
         if day not in available_days:
-            candidates.append((
-                f"Add {day} availability",
-                {"availability": availability + [f"{day}-{time}" for time in TIMES]},
-            ))
+            candidates.append(
+                (
+                    f"Add {day} availability",
+                    {
+                        "availability": availability
+                        + [f"{day}-{time}" for time in TIMES]
+                    },
+                )
+            )
 
     budget = quiz.get("budget_usd")
-    costs = [row.get("cost_usd") for row in rows if isinstance(row.get("cost_usd"), (int, float))]
+    costs = [
+        row.get("cost_usd")
+        for row in rows
+        if isinstance(row.get("cost_usd"), (int, float))
+    ]
     if budget is not None and costs:
         max_budget = ((int(max(costs)) + 24) // 25) * 25
         next_budget = ((int(budget) // 25) + 1) * 25
@@ -319,10 +384,12 @@ def _sensitivity_suggestions(
     current_distance = quiz.get("max_distance_mi")
     if current_distance is None:
         current_distance = TRANSPORT_WEEKLY_MI.get(transport, 40)
-    candidates.append((
-        "Increase travel range by 5 miles",
-        {"max_distance_mi": float(current_distance) + 5},
-    ))
+    candidates.append(
+        (
+            "Increase travel range by 5 miles",
+            {"max_distance_mi": float(current_distance) + 5},
+        )
+    )
 
     if transport != "car":
         candidates.append(("Switch transport to a car", {"transport": "car"}))
@@ -333,14 +400,18 @@ def _sensitivity_suggestions(
         candidate_score = _best_plan_score(build_plan(candidate_quiz, rows))
         improvement = candidate_score - baseline_score
         if improvement > 0:
-            improvements.append({
-                "label": label,
-                "score_before": baseline_score,
-                "score_after": candidate_score,
-                "improvement": improvement,
-                "overrides": override,
-            })
-    return sorted(improvements, key=lambda item: (-item["improvement"], item["label"]))[:3]
+            improvements.append(
+                {
+                    "label": label,
+                    "score_before": baseline_score,
+                    "score_after": candidate_score,
+                    "improvement": improvement,
+                    "overrides": override,
+                }
+            )
+    return sorted(improvements, key=lambda item: (-item["improvement"], item["label"]))[
+        :3
+    ]
 
 
 @app.post("/api/simulate")
@@ -359,8 +430,14 @@ def simulate(body: SimulateRequest) -> dict[str, Any]:
 
     return {
         "diff": {
-            "gained": [simulated_programs[key] for key in sorted(simulated_programs.keys() - baseline_programs.keys())],
-            "lost": [baseline_programs[key] for key in sorted(baseline_programs.keys() - simulated_programs.keys())],
+            "gained": [
+                simulated_programs[key]
+                for key in sorted(simulated_programs.keys() - baseline_programs.keys())
+            ],
+            "lost": [
+                baseline_programs[key]
+                for key in sorted(baseline_programs.keys() - simulated_programs.keys())
+            ],
             "best_score_before": baseline_score,
             "best_score_after": simulated_score,
             "score_improvement": simulated_score - baseline_score,
@@ -381,6 +458,7 @@ def fit(body: Quiz) -> dict[str, Any]:
     """OpenPlay scoring: hard filters, then a weighted fit score with a per-factor breakdown."""
     return fit_catalog(body.model_dump(), fetch_programs())
 
+
 @app.post("/api/opportunity/{opp_id}")
 def opportunity(opp_id: str, body: Quiz) -> dict[str, Any]:
     rows = fetch_programs()
@@ -395,7 +473,12 @@ def opportunity(opp_id: str, body: Quiz) -> dict[str, Any]:
         "opportunity": item,
         "pathway": pathway(quiz, rows),
         "similar": [
-            {"id": i, "name": by_id[i]["name"], "compatibility": by_id[i]["compatibility"], "type": by_id[i]["type"]}
+            {
+                "id": i,
+                "name": by_id[i]["name"],
+                "compatibility": by_id[i]["compatibility"],
+                "type": by_id[i]["type"],
+            }
             for i, _ in sims
         ],
     }
@@ -407,5 +490,10 @@ def geocode_offline(q: str) -> dict[str, Any]:
     home = resolve_home(q[:100], None, None)
     if "lat" not in home:
         return {"found": False}
-    return {"found": True, "lat": home["lat"], "lng": home["lng"], "label": home["home_label"],
-            "country": home["home_country"]}
+    return {
+        "found": True,
+        "lat": home["lat"],
+        "lng": home["lng"],
+        "label": home["home_label"],
+        "country": home["home_country"],
+    }
