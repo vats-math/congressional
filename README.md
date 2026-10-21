@@ -91,7 +91,7 @@ on the team can open a file and read it top to bottom.
 - **No build step.** Plain JS modules are easy to read and need no install, but we don't get
   type checking or bundling.
 - **Accounts in SQLite on one server.** Simple and private, but not built for many users at once.
-- **Free map tiles and geocoding** (CARTO, Esri, OpenStreetMap Nominatim). No API keys, but they
+- **Free map tiles and geocoding** (OpenStreetMap, Esri, OpenStreetMap Nominatim). No API keys, but they
   are rate-limited.
 
 ## Barriers (Phase 5)
