@@ -5,6 +5,7 @@ import re
 from datetime import date, datetime
 from typing import Any
 
+from app.advisor import add_environment_weight, environment_score
 from app.catalog import ADAPTIVE_ONLY, TYPE_COLORS, scope_for
 from app.recommender import TfidfIndex
 
@@ -62,7 +63,9 @@ SKILL_RANK = {
 }
 
 
-def _skill_score(user_skill: str | None, opp_skills: list[str], wants_travel: bool | None) -> float:
+def _skill_score(
+    user_skill: str | None, opp_skills: list[str], wants_travel: bool | None
+) -> float:
     if not user_skill:
         return 0.55
     ranks = [SKILL_RANK.get(s, 1) for s in opp_skills]
@@ -155,7 +158,8 @@ def _type_intent_score(intent_types: list[str] | None, opp_type: str) -> float:
     return 1.0 if opp_type in intent_types else 0.28
 
 
-WEIGHTS = {
+# Used when the student has no confirmed barriers, so scores stay exactly as before.
+BASE_WEIGHTS = {
     "sport": 0.22,
     "age": 0.16,
     "skill": 0.11,
@@ -167,6 +171,11 @@ WEIGHTS = {
     "relevance": 0.05,
 }
 
+# Used when she has confirmed barriers: the old weights shrink by 8% and
+# "environment" takes that 8%, so the total is still 1.
+WEIGHTS = add_environment_weight(BASE_WEIGHTS, share=0.08)
+assert abs(sum(WEIGHTS.values()) - 1) < 1e-9
+
 FACTOR_LABELS = {
     "sport": "sport",
     "age": "age range",
@@ -177,10 +186,13 @@ FACTOR_LABELS = {
     "deadline": "deadline timing",
     "type": "program type",
     "relevance": "prompt keywords",
+    "environment": "fit for your barriers",
 }
 
 
-def _reasons(factors: dict[str, float], profile: dict[str, Any]) -> dict[str, list[str]]:
+def _reasons(
+    factors: dict[str, float], profile: dict[str, Any]
+) -> dict[str, list[str]]:
     asked = {
         "sport": profile.get("sport"),
         "age": profile.get("age"),
@@ -191,9 +203,16 @@ def _reasons(factors: dict[str, float], profile: dict[str, Any]) -> dict[str, li
         "type": profile.get("intent_types"),
         "relevance": profile.get("raw_query"),
         "deadline": True,
+        "environment": profile.get("barriers") or None,
     }
-    strong = [FACTOR_LABELS[k] for k, v in factors.items() if v >= 0.85 and asked[k] is not None]
-    weak = [FACTOR_LABELS[k] for k, v in factors.items() if v < 0.4 and asked[k] is not None]
+    strong = [
+        FACTOR_LABELS[k]
+        for k, v in factors.items()
+        if v >= 0.85 and asked[k] is not None
+    ]
+    weak = [
+        FACTOR_LABELS[k] for k, v in factors.items() if v < 0.4 and asked[k] is not None
+    ]
     return {"strong": strong, "weak": weak}
 
 
@@ -206,7 +225,9 @@ def rank_opportunity(
 
     sport = _sport_score(profile.get("sport"), opp["sport"])
     age, eligible_age = _age_score(profile.get("age"), opp["min_age"], opp["max_age"])
-    skill = _skill_score(profile.get("skill"), opp["skill_levels"], profile.get("wants_travel"))
+    skill = _skill_score(
+        profile.get("skill"), opp["skill_levels"], profile.get("wants_travel")
+    )
     travel = _travel_score(profile.get("wants_travel"), opp["is_travel"], opp["type"])
     proximity, distance_km, within_radius = _proximity_score(
         home, opp["lat"], opp["lng"], profile.get("max_distance_km")
@@ -240,7 +261,14 @@ def rank_opportunity(
         "type": type_fit,
         "relevance": 0.5 if relevance is None else _clamp(relevance),
     }
-    raw = sum(factors[k] * WEIGHTS[k] for k in WEIGHTS)
+
+    barriers = profile.get("barriers") or []
+    if barriers:
+        factors["environment"] = environment_score(opp.get("tags") or [], barriers)
+        weights = WEIGHTS
+    else:
+        weights = BASE_WEIGHTS
+    raw = sum(factors[k] * weights[k] for k in weights)
     score = round(100 * raw)
     eligible = eligible_age and within_radius and residency_ok and scope != "resource"
     if not eligible:
@@ -252,7 +280,9 @@ def rank_opportunity(
         **opp,
         "compatibility": score,
         "distance_km": None if distance_km is None else round(distance_km, 1),
-        "distance_mi": None if distance_km is None else round(distance_km * 0.621371, 1),
+        "distance_mi": None
+        if distance_km is None
+        else round(distance_km * 0.621371, 1),
         "eligible": eligible,
         "eligible_age": eligible_age,
         "within_radius": within_radius,
@@ -280,6 +310,15 @@ def rank_catalog(
         top = max(raw.values(), default=0.0)
         if top > 0:
             relevance = {k: v / top for k, v in raw.items()}
-    ranked = [rank_opportunity(profile, row, relevance.get(row["id"]) if relevance else None) for row in rows]
-    ranked.sort(key=lambda r: (-r["compatibility"], r["distance_km"] is None, r["distance_km"] or 0))
+    ranked = [
+        rank_opportunity(profile, row, relevance.get(row["id"]) if relevance else None)
+        for row in rows
+    ]
+    ranked.sort(
+        key=lambda r: (
+            -r["compatibility"],
+            r["distance_km"] is None,
+            r["distance_km"] or 0,
+        )
+    )
     return ranked
