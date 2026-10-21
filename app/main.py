@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app import auth
 from app.advisor import detect_barriers, summarize_plan
+from app.chat import ChatUnavailable, ask as chat_ask
 from app.fit import fit_catalog
 from app.local_data import fetch_programs, load_local
 from app.analysis import affordability_index, analyze
@@ -185,6 +186,16 @@ class DetectIn(BaseModel):
     message: str = Field(default="", max_length=1000)
 
 
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=2000)
+
+
+class ChatIn(BaseModel):
+    quiz: Quiz
+    messages: list[ChatMessage] = Field(min_length=1, max_length=40)
+
+
 class SimulatorOverrides(BaseModel):
     """Only the quiz fields that the what-if simulator can change."""
 
@@ -312,6 +323,19 @@ def plan(body: Quiz) -> dict[str, Any]:
 def advisor_detect(body: DetectIn) -> dict[str, Any]:
     """Free text in, suggested barriers out. The frontend asks her to confirm each one."""
     return detect_barriers(body.message)
+
+
+@app.post("/api/chat")
+def chat(body: ChatIn) -> dict[str, Any]:
+    """'Ask PlayPath': answers questions using her plan (from the database) plus general sports knowledge."""
+    plan_data = build_plan(body.quiz.model_dump(), fetch_programs())
+    try:
+        reply = chat_ask([m.model_dump() for m in body.messages], plan_data)
+    except ChatUnavailable as err:
+        raise HTTPException(503, str(err)) from err
+    except ValueError as err:
+        raise HTTPException(422, str(err)) from err
+    return {"reply": reply}
 
 
 @app.post("/api/plan/summary")

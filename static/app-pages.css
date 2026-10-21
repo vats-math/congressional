@@ -257,3 +257,24 @@ label.stack { display: grid; gap: var(--space-1); font-size: 14px; font-weight: 
 .ai-summary { border-left: 4px solid var(--seafoam); }
 .ai-summary p { margin: 0 0 var(--space-2); line-height: 1.5; }
 .ai-label { display: inline-block; font-size: 12px; font-weight: 600; color: var(--plum); background: var(--tint); border-radius: var(--radius-sm); padding: 2px var(--space-2); }
+
+/* Ask PlayPath chat */
+#chat { position: fixed; right: var(--space-4); bottom: var(--space-4); z-index: 2000; }
+.chat-open { box-shadow: 0 2px 8px rgba(42, 22, 51, 0.25); }
+.chat-panel { width: min(380px, calc(100vw - 32px)); height: min(560px, calc(100vh - 32px)); display: flex; flex-direction: column;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 4px 16px rgba(42, 22, 51, 0.2); }
+.chat-panel[hidden] { display: none; }
+.chat-head { display: flex; justify-content: space-between; align-items: center; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--line); }
+.chat-note { font-size: 12px; color: var(--muted); margin: 0; padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--line); }
+.chat-log { flex: 1; overflow-y: auto; padding: var(--space-3) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
+.msg { margin: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius); max-width: 85%; line-height: 1.45; font-size: 14px; white-space: pre-wrap; }
+.msg.user { align-self: flex-end; background: var(--plum); color: #fff; }
+.msg.assistant { align-self: flex-start; background: var(--tint); color: var(--ink); }
+.msg.pending { color: var(--muted); font-style: italic; }
+.msg.error { background: #fbeef2; color: var(--danger); }
+.chat-suggest { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: 0 var(--space-4) var(--space-2); }
+.chat-suggest[hidden] { display: none; }
+.chip-btn { background: var(--card); color: var(--plum); border: 1px solid var(--line); border-radius: 999px; padding: var(--space-1) var(--space-3); font-size: 13px; font-weight: 500; }
+.chat-form { display: flex; gap: var(--space-2); padding: var(--space-3) var(--space-4); border: 0; border-top: 1px solid var(--line); background: none; border-radius: 0; }
+.chat-form input { flex: 1; }
+#chat [hidden] { display: none !important; }

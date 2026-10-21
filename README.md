@@ -106,6 +106,19 @@ on the team can open a file and read it top to bottom.
 5. The dashboard shows a 3-sentence **AI summary** written only from the finished plan's data. The server rejects
    it if it isn't exactly 3 sentences or uses a number that isn't in the plan.
 
+### Ask PlayPath (chat)
+
+A chat button on every screen (`static/js/chat.js` → `/api/chat` → `app/chat.py`, Groq). The server first builds
+her plan from our database and gives the model only that plan data plus strict rules:
+- **Questions about her plan** are answered only from that data. If it isn't there, it says so.
+- **General sports questions** (gear, rules, nerves before tryouts) are answered generally.
+- **It may never name a program, team, price, date or place that isn't in her plan.** A reply that quotes a dollar
+  amount not in the data is replaced with "I don't have a reliable price for that…".
+- No medical diagnoses (it sends her to a doctor or athletic trainer). The chat history is kept only in the
+  browser tab, not saved.
+
+Needs `GROQ_API_KEY`. Without it, the chat says it isn't set up yet.
+
 ### Advisor evaluation
 
 `data/eval/barrier_messages.csv` has 30 sample messages with the labels a person would expect.
