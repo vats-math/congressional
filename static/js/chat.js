@@ -21,9 +21,9 @@ export function mountChat() {
         <div><strong>Ask PlayPath</strong> <span class="ai-label">AI</span></div>
         <button type="button" class="chat-close ghost small" aria-label="Close chat">Close</button>
       </header>
-      <p class="chat-note">Answers come from an AI. Questions about your plan use your matches from our database.
-        Don't share personal details like your address or phone number.</p>
-      <div class="chat-log" aria-live="polite"></div>
+      <div class="chat-log" aria-live="polite">
+        <p class="msg assistant">Hi! I'm PlayPath. Ask me about your matches, your schedule, or anything about your sport.</p>
+      </div>
       <div class="chat-suggest">${SUGGESTIONS.map((q) => `<button type="button" class="chip-btn">${esc(q)}</button>`).join("")}</div>
       <form class="chat-form">
         <input name="q" maxlength="1000" autocomplete="off" placeholder="Ask a question…" aria-label="Your question" />

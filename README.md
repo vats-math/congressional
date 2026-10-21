@@ -115,7 +115,7 @@ her plan from our database and gives the model only that plan data plus strict r
 - **It may never name a program, team, price, date or place that isn't in her plan.** A reply that quotes a dollar
   amount not in the data is replaced with "I don't have a reliable price for that…".
 - No medical diagnoses (it sends her to a doctor or athletic trainer). The chat history is kept only in the
-  browser tab, not saved.
+  browser tab, not saved. Messages are sent to Groq to get an answer.
 
 Needs `GROQ_API_KEY`. Without it, the chat says it isn't set up yet.
 
