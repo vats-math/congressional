@@ -138,6 +138,39 @@ label.stack { display: grid; gap: 6px; font-size: 14px; font-weight: 500; color:
 .pstep b { font-size: 14px; }
 .pstep a { font-size: 12px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .pstep small { color: var(--muted); }
+
+/* What-if simulator */
+.simulator-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.sim-controls { display: block; }
+.sim-controls .hint { margin: -4px 0 10px; }
+.sim-fieldset { border: 1px solid var(--line); border-radius: 14px; margin: 16px 0; padding: 12px; min-width: 0; }
+.sim-fieldset legend { padding: 0 5px; font-weight: 600; font-size: 14px; }
+.sim-number-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sim-number-grid .stack { margin-top: 0; }
+.sim-results { position: sticky; top: 16px; }
+.sim-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 14px 0 20px; }
+.sim-metrics > div { display: grid; align-content: start; gap: 4px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.sim-metrics span, .sim-metrics small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.sim-metrics strong { font-family: Fraunces, Georgia, serif; font-size: 19px; overflow-wrap: anywhere; }
+.sim-program-diff { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.sim-program-diff h3, .sim-results > h3 { margin: 14px 0 8px; font-size: 14px; }
+.sim-program-diff .mini { margin-bottom: 8px; }
+.sim-suggestions { padding-left: 22px; margin: 8px 0 16px; }
+.sim-suggestions li { padding: 5px 0; }
+.sim-suggestions strong, .sim-suggestions span { display: block; }
+.sim-suggestions span { color: var(--muted); font-size: 13px; }
+.sim-note { border-top: 1px solid var(--line); padding-top: 10px; margin-bottom: 0; }
+
+@media (max-width: 900px) {
+  .simulator-grid { grid-template-columns: 1fr; }
+  .sim-results { position: static; }
+}
+@media (max-width: 560px) {
+  .sim-number-grid, .sim-program-diff { grid-template-columns: 1fr; }
+  .sim-metrics { grid-template-columns: 1fr; }
+  .sim-fieldset { overflow-x: auto; }
+  .sim-fieldset .avail { min-width: 450px; }
+}
 .pdot { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; background: var(--line); color: var(--ink); }
 .pstep.past { background: #eef5f1; }
 .pstep.past .pdot { background: var(--pine); color: #fff; }

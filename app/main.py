@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import Cookie, FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app import auth
 from app.fit import fit_catalog
@@ -18,7 +18,7 @@ from app.catalog import TYPE_COLORS
 from app.db import fetch_all, init_db
 from app.parser import parse_query, resolve_home
 from app.pipeline import run as run_pipeline
-from app.plan import build_plan, pathway, to_ranking_profile
+from app.plan import DAYS, TIMES, TRANSPORT_WEEKLY_MI, build_plan, pathway, to_ranking_profile
 from app.ranking import rank_catalog
 from app.recommender import TfidfIndex
 
@@ -162,6 +162,30 @@ class Quiz(BaseModel):
     ride_cutoff: Optional[str] = Field(default=None, max_length=8)  # latest time she can get a ride, e.g. "8:00 PM"
 
 
+class SimulatorOverrides(BaseModel):
+    """Only the quiz fields that the what-if simulator can change."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    availability: list[str] = Field(default_factory=list)
+    budget_usd: Optional[int] = Field(default=None, ge=0)
+    max_distance_mi: Optional[float] = Field(default=None, gt=0)
+    transport: Optional[Literal["car", "parent", "carpool", "transit", "bike_walk"]] = None
+
+    @field_validator("availability")
+    @classmethod
+    def validate_availability(cls, values: list[str]) -> list[str]:
+        valid = {f"{day}-{time}" for day in DAYS for time in TIMES}
+        if any(value not in valid for value in values):
+            raise ValueError("availability must contain valid day-time quiz slots")
+        return list(dict.fromkeys(values))
+
+
+class SimulateRequest(BaseModel):
+    quiz: Quiz
+    overrides: SimulatorOverrides = Field(default_factory=SimulatorOverrides)
+
+
 class AccountUpdate(BaseModel):
     name: Optional[str] = Field(default=None, max_length=80)
 
@@ -240,6 +264,116 @@ def put_profile(body: Quiz, playpath_session: Optional[str] = Cookie(default=Non
 def plan(body: Quiz) -> dict[str, Any]:
     """Works for guests (profile kept in the browser) and signed-in users alike."""
     return build_plan(body.model_dump(), fetch_all())
+
+
+def _pathway_total_weeks(plan_data: dict[str, Any]) -> Optional[int]:
+    """Return a duration only when every pathway step provides one."""
+    steps = plan_data.get("pathway") or []
+    durations = [step.get("weeks") for step in steps]
+    if not durations or any(not isinstance(weeks, (int, float)) for weeks in durations):
+        return None
+    return int(sum(durations))
+
+
+def _best_plan_score(plan_data: dict[str, Any]) -> int:
+    matches = plan_data.get("top_matches") or []
+    return int(matches[0]["compatibility"]) if matches else 0
+
+
+def _programs_by_id(plan_data: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        str(program["id"]): program
+        for program in plan_data.get("weekly_programs", [])
+        if program.get("id") is not None
+    }
+
+
+def _sensitivity_suggestions(
+    quiz: dict[str, Any], rows: list[dict[str, Any]], baseline_score: int
+) -> list[dict[str, Any]]:
+    """Try one quiz change at a time and keep the largest positive score gains."""
+    candidates: list[tuple[str, dict[str, Any]]] = []
+    availability = list(quiz.get("availability") or [])
+    available_days = {slot.partition("-")[0] for slot in availability}
+
+    # The quiz records day/time windows rather than whole days, so test a newly
+    # available day with all three windows.
+    for day in DAYS:
+        if day not in available_days:
+            candidates.append((
+                f"Add {day} availability",
+                {"availability": availability + [f"{day}-{time}" for time in TIMES]},
+            ))
+
+    budget = quiz.get("budget_usd")
+    costs = [row.get("cost_usd") for row in rows if isinstance(row.get("cost_usd"), (int, float))]
+    if budget is not None and costs:
+        max_budget = ((int(max(costs)) + 24) // 25) * 25
+        next_budget = ((int(budget) // 25) + 1) * 25
+        for amount in range(next_budget, max_budget + 1, 25):
+            candidates.append((f"Raise budget to ${amount}", {"budget_usd": amount}))
+
+    transport = quiz.get("transport") or "car"
+    current_distance = quiz.get("max_distance_mi")
+    if current_distance is None:
+        current_distance = TRANSPORT_WEEKLY_MI.get(transport, 40)
+    candidates.append((
+        "Increase travel range by 5 miles",
+        {"max_distance_mi": float(current_distance) + 5},
+    ))
+
+    if transport != "car":
+        candidates.append(("Switch transport to a car", {"transport": "car"}))
+
+    improvements = []
+    for label, override in candidates:
+        candidate_quiz = {**quiz, **override}
+        candidate_score = _best_plan_score(build_plan(candidate_quiz, rows))
+        improvement = candidate_score - baseline_score
+        if improvement > 0:
+            improvements.append({
+                "label": label,
+                "score_before": baseline_score,
+                "score_after": candidate_score,
+                "improvement": improvement,
+                "overrides": override,
+            })
+    return sorted(improvements, key=lambda item: (-item["improvement"], item["label"]))[:3]
+
+
+@app.post("/api/simulate")
+def simulate(body: SimulateRequest) -> dict[str, Any]:
+    """Compare a quiz with temporary overrides; no profile or database rows are changed."""
+    quiz = body.quiz.model_dump()
+    overrides = body.overrides.model_dump(exclude_unset=True)
+    simulated_quiz = {**quiz, **overrides}
+    rows = fetch_all()
+    baseline_plan = build_plan(quiz, rows)
+    simulated_plan = build_plan(simulated_quiz, rows)
+    baseline_programs = _programs_by_id(baseline_plan)
+    simulated_programs = _programs_by_id(simulated_plan)
+    baseline_score = _best_plan_score(baseline_plan)
+    simulated_score = _best_plan_score(simulated_plan)
+
+    return {
+        "diff": {
+            "gained": [simulated_programs[key] for key in sorted(simulated_programs.keys() - baseline_programs.keys())],
+            "lost": [baseline_programs[key] for key in sorted(baseline_programs.keys() - simulated_programs.keys())],
+            "best_score_before": baseline_score,
+            "best_score_after": simulated_score,
+            "score_improvement": simulated_score - baseline_score,
+            "sessions_before": len(baseline_plan["sessions"]),
+            "sessions_after": len(simulated_plan["sessions"]),
+            "pathway_weeks_before": _pathway_total_weeks(baseline_plan),
+            "pathway_weeks_after": _pathway_total_weeks(simulated_plan),
+        },
+        "sensitivity": _sensitivity_suggestions(quiz, rows, baseline_score),
+        "notes": [
+            "Program listings do not include real practice times, so availability changes cannot yet affect match scores.",
+            "The current pathway does not estimate weeks, so total pathway duration is unavailable.",
+        ],
+    }
+
 
 @app.post("/api/fit")
 def fit(body: Quiz) -> dict[str, Any]:

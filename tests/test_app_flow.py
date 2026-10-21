@@ -56,6 +56,34 @@ def test_plan_uses_availability_and_real_programs(client):
     assert any("Cost" in t for t in plan["tips"])
 
 
+def test_simulator_compares_temporary_overrides(client):
+    response = client.post("/api/simulate", json={
+        "quiz": QUIZ,
+        "overrides": {"availability": ["Mon-morning", *QUIZ["availability"]]},
+    })
+    assert response.status_code == 200
+    result = response.json()
+    assert result["diff"]["sessions_before"] == 3
+    assert result["diff"]["sessions_after"] == 4
+    assert isinstance(result["diff"]["best_score_before"], int)
+    assert isinstance(result["diff"]["best_score_after"], int)
+    assert result["diff"]["pathway_weeks_before"] is None
+    assert result["diff"]["pathway_weeks_after"] is None
+    assert len(result["sensitivity"]) <= 3
+    assert all(
+        result["sensitivity"][i]["improvement"] >= result["sensitivity"][i + 1]["improvement"]
+        for i in range(len(result["sensitivity"]) - 1)
+    )
+
+
+def test_simulator_rejects_unknown_availability_slot(client):
+    response = client.post("/api/simulate", json={
+        "quiz": QUIZ,
+        "overrides": {"availability": ["Anytime-Someday"]},
+    })
+    assert response.status_code == 422
+
+
 def test_bike_walk_limits_weekly_distance(client):
     quiz = {**QUIZ, "transport": "bike_walk"}
     plan = client.post("/api/plan", json=quiz).json()

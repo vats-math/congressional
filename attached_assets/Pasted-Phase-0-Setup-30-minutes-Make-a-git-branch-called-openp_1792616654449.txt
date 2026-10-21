@@ -1,0 +1,96 @@
+Phase 0: Setup (30 minutes)
+Make a git branch called openplay-v3 so you can't break the working app.
+Run pytest and confirm everything passes. That's your baseline.
+Delete or freeze docs/ so you don't maintain two engines.
+
+Phase 1: Real data (the foundation)
+Goal: each program has real weekly session times, environment tags, and a stage.
+Add the columns. In app/db.py, add three columns to the opportunities table: stage, environment (a comma-separated string such as beginner_friendly,drop_in,girls_only), and last_verified. Add them to the COLUMNS tuple too.
+Gotcha: CREATE TABLE IF NOT EXISTS does not add columns to a table that already exists. During development, delete data/playpath.db and let init_db() rebuild it.
+Add a sessions table. Columns: opportunity_id, weekday (0–6), start_minute, end_minute, drop_in (0/1). Storing times as minutes since midnight (4:30 PM = 990) makes overlap math easy.
+Update fetch_all() so each opportunity dict includes a sessions list. Run a second query and group the results by opportunity_id in Python.
+Decide your stage list as a constant in catalog.py, in order: intro_clinic, open_play, camp, rec_league, intermediate_group, school_team, club_league.
+Collect the data. Pick your metro area and make a spreadsheet with one row per program and one row per session. Call or check each program's website, write the date you verified it, and fill in cost and environment tags. Aim for 40–60 programs. This is the most time-consuming step, so split it across your team.
+Load it. Extend pipeline.py to read the new columns (or write a small separate loader).
+
+Phase 2: New scoring (ranking.py)
+Goal: (a) filter out programs she can't do, then (b) score the rest with your weights.
+2a. Hard filters
+Write one function that takes a profile and an opportunity and returns (is_feasible, reasons_if_not). A program is infeasible if any of these hold:
+the sport doesn't match,
+her age is outside the range,
+none of its sessions fit her availability,
+it's farther than her max distance,
+every session ends after her transport cutoff.
+Returning the reasons matters, because the simulator will use them later.
+2b. Schedule score (25% of the total)
+Convert her availability slots to time windows per weekday. plan.py already has morning/afternoon/evening, so decide the hours for each (e.g. evening = 17:00–20:00 in minutes).
+Write a helper overlap_minutes(a_start, a_end, b_start, b_end) that returns how many minutes two ranges share. It is max(0, min(ends) − max(starts)).
+For each session, take the windows on the same weekday and sum the overlap. Divide by the session's length to get a 0–1 fit.
+The program's schedule score is its best session's fit. For a bonus, add credit if she can attend two sessions a week.
+2c. Transport score (10%)
+Add a field to the quiz like "latest time I can get a ride." Score 1.0 if the session ends before that time, 0 if not (that case is also a hard filter). For walk/bike/transit, combine with a distance cap per mode, like your TRANSPORT_WEEKLY_MI.
+2d. Other factors
+Rename and rescale the ones you already have. Each should return a number from 0 to 1:
+_proximity_score → distance (20%)
+_affordability_score → budget (15%)
+_skill_score → experience (15%)
+merge _travel_score and _type_intent_score → competitive preference (10%)
+_age_score → age (5%)
+2e. Combine
+Put the weights in a dict that's passed into the ranking function as an argument. Don't hardcode it, because the simulator needs to change it.
+Final score = the sum of weight × factor over the factors she answered. If she skipped a question, drop that factor and rescale the remaining weights so they add up to 1.
+Return the score plus a breakdown dict like {"schedule": 0.9, "distance": 0.7, ...}.
+In the UI, show the breakdown as small bars under "why this matches."
+Tests to write:
+A program with no schedule overlap is filtered out.
+A closer program never scores lower when everything else is equal.
+Weights always add up to 1 after rescaling.
+
+Phase 3: Pathway engine (plan.py)
+Goal: turn "here are the five levels" into "here is your route, with real programs."
+Define the map. A dictionary where each stage lists which stages can come next. Each connection carries weeks (typical time) and a ready_when text like "6+ sessions attended."
+Starting stage. Write a function that maps her experience to a stage. Include years_since_played: if it's more than 2 years, start one stage lower than her stated level.
+Goal stage. Map her goal and competitive preference to a target stage. For example, "recreational" ends at rec_league, and "make the school team" ends at school_team.
+Enumerate routes. With about 7 stages, you can list every path from start to goal using a simple recursive function (depth-first search). You don't need Dijkstra, because the graph is tiny.
+Fill each stage. For each stage on a route, take the best feasible program from Phase 2 whose stage matches. If none exists, mark the step as a gap.
+Score each route. Use the average fit of its filled steps, with a penalty per gap and a small penalty for extra length. Pick the best route.
+Return the pathway as an ordered list: stage, program (or gap), weeks, and the readiness note.
+Show the gaps honestly in the UI ("no beginner clinic near you yet"). It's useful data for your project's pitch about access.
+
+Phase 4: What-if simulator
+Goal: change one thing about her situation and see how the plan changes.
+Make build_plan pure. It should depend only on the quiz, the rows, and the weights, with no hidden state. It already mostly does.
+New endpoint in main.py: POST /api/simulate. It takes the quiz and an overrides dict like {"availability": ["Sat-morning"], "budget_usd": 150}.
+Inside the endpoint: copy the quiz, apply the overrides, and run build_plan on both versions.
+Diff the two plans. Compare the sets of program ids (gained and lost), the top fit score, and the pathway's total weeks.
+Sensitivity analysis (the standout):
+Make a list of single changes: add each day she marked unavailable, raise the budget in steps of $25, add 5 miles, change transport to a car.
+Loop through them, run the plan for each, and record how much the best score improved.
+Sort by improvement and return the top 3: "Adding Thursdays would raise your best match from 61 to 88."
+Frontend: add a #/simulate view with controls. Call the endpoint after she stops adjusting for about 300 ms (a debounce) so you don't fire a request on every slider tick.
+
+Phase 5: AI advisor and barrier detection (new app/advisor.py)
+Get a free API key (Gemini or Groq both have free tiers; check their current limits). In Replit, go to Secrets, add it, and read it in Python with os.environ.
+Write your barrier list as a constant: experience, confidence, social, cost, transport, time, environment, family, injury.
+Define the response shape. Use a Pydantic model you already know. It contains a list of barriers (each with tag, confidence 0–1, and evidence) plus years_since_played.
+Write the prompt. The system message says: you are classifying barriers; use only these tags; return JSON only; evidence must be words copied from the student's message.
+Call the API with httpx (already in your requirements) with a timeout of about 10 seconds.
+Validate the result:
+Parse the JSON with your Pydantic model.
+Drop any barrier whose tag isn't in your list.
+Drop any barrier whose evidence text doesn't appear in what the student wrote. That's a cheap hallucination check.
+Fallback: wrap steps 5–6 in try/except. On any failure, run a simple keyword-based version (e.g. "nervous", "scared", "haven't played" → confidence/experience) using the style already in parser.py.
+Barriers change the ranking. Make a dict: barrier → tags to boost and tags to avoid. For confidence: boost beginner_friendly, no_tryouts, girls_only, drop_in; avoid tryout_required. Add an "environment" factor to ranking that checks a program's tags against this. Reduce other weights slightly so the total stays 1.
+Frontend: add a free-text quiz step, then show what it detected as chips: "It sounds like trying out feels intimidating. Is that right? Yes / No." Only apply barriers she confirms.
+Explanation: after the plan is built, send the plan's data (not her raw message) to the model and ask for 3 plain sentences using only that data. Label it "AI summary."
+Evaluation: write about 30 sample messages with the labels you expect, in a CSV. Write a script that runs each through the advisor and reports accuracy. Put the number in your submission.
+
+Phase 6: Make it yours
+Split app.js into modules: api.js, state.js, and one file per view. Use import/export, with type="module" on the script tag.
+Redesign: choose one typeface pairing, 2–3 brand colors plus neutrals, and one spacing scale. Replace emoji with real icons or none. Rewrite the copy yourselves.
+Rewrite the README to explain your design choices and the tradeoffs.
+Test with real users: 5–10 girls, and keep their quotes.
+
+Where to start
+Start with Phase 1, step 1 and step 3: add the three columns and the sessions table in db.py. It's about 20 lines and sets up everything else. When you've written it, paste it here and I'll review it. If any step above is unclear (the overlap math, the route enumeration, the sensitivity loop), tell me which one and I'll explain it with a worked numeric example.
