@@ -1,12 +1,19 @@
 :root {
-  --ink: #14201e;
-  --muted: #5c6a67;
-  --paper: #f4efe6;
-  --card: #fffaf3;
-  --line: #d9cfc0;
-  --pine: #12443d;
-  --coral: #d45b45;
-  --gold: #c9a227;
+  --ink: #462255;
+  --muted: #765d80;
+  --paper: #ddfff7;
+  --card: #f7fffd;
+  --surface: #fbfffe;
+  --line: #bfe8e2;
+  --pine: #462255;
+  --coral: #aa4465;
+  --gold: #ffa69e;
+  --seafoam: #93e1d8;
+  --seafoam-deep: #477f78;
+  --rose-soft: #fff1ef;
+  --plum-soft: #f1eaf4;
+  --success: #3f756d;
+  --danger: #873a58;
 
   --serif: Fraunces, Georgia, serif;
   --sans: Outfit, system-ui, sans-serif;
@@ -19,7 +26,10 @@
 html,
 body {
   margin: 0;
-  background: radial-gradient(1200px 600px at 10% -10%, #e7f0ea, transparent), var(--paper);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(147, 225, 216, 0.38), transparent),
+    radial-gradient(900px 600px at 100% 0%, rgba(255, 166, 158, 0.16), transparent),
+    linear-gradient(145deg, var(--paper), #f5eff8);
   color: var(--ink);
   font-family: var(--sans);
 }
@@ -117,7 +127,7 @@ select {
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fff;
+  background: var(--surface);
   color: var(--ink);
   font: inherit;
 }
@@ -203,7 +213,7 @@ label.check input {
 }
 
 #status.error {
-  color: #a33a3a;
+  color: var(--danger);
 }
 
 button {
@@ -211,7 +221,7 @@ button {
   border: 0;
   border-radius: 999px;
   background: var(--pine);
-  color: #f6f3ea;
+  color: var(--surface);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
@@ -404,7 +414,7 @@ button:disabled {
   border-radius: 50%;
   font-family: var(--serif);
   font-size: 22px;
-  color: #fff;
+  color: var(--surface);
 }
 
 .meta,
@@ -420,7 +430,7 @@ button:disabled {
   padding: 2px 8px;
   border-radius: 999px;
   font-size: 11px;
-  color: #fff;
+  color: var(--surface);
 }
 
 .pill.outline {
@@ -441,15 +451,15 @@ button:disabled {
 }
 
 .why.good {
-  color: #1b7f4b;
+  color: var(--success);
 }
 
 .why.weak {
-  color: #9a5b12;
+  color: #7b5360;
 }
 
 .why.warn {
-  color: #a33a3a;
+  color: var(--danger);
 }
 
 details.factors {
@@ -497,7 +507,7 @@ details.factors summary {
 .map-tools {
   position: absolute;
   z-index: 500;
-  background: rgba(255, 250, 243, 0.94);
+  background: rgba(251, 255, 254, 0.96);
   border: 1px solid var(--line);
   border-radius: 12px;
   font-size: 12px;
@@ -548,11 +558,11 @@ details.factors summary {
   display: grid !important;
   /* leaflet sets its own display */
   place-items: center;
-  background: rgba(18, 68, 61, 0.88);
-  border: 2px solid #fffaf3;
+  background: rgba(70, 34, 85, 0.9);
+  border: 2px solid var(--card);
   border-radius: 50%;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
-  color: #f6f3ea;
+  box-shadow: 0 1px 4px rgba(70, 34, 85, 0.25);
+  color: var(--surface);
   font-size: 12px;
   font-weight: 600;
 }
@@ -562,12 +572,18 @@ details.factors summary {
   background-image: none !important;
   display: grid !important;
   place-items: center;
-  font-size: 20px;
+  width: auto !important;
+  min-width: 54px;
+  height: 36px !important;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--pine);
+  background-color: var(--card) !important;
 }
 
 .leaflet-control-layers-toggle::after {
-  content: "☰";
+  content: "Layers";
 }
 
 .span-2 {

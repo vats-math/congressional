@@ -2,6 +2,19 @@
 const TYPE_COLORS = window.TYPE_COLORS || {};
 const NOMINATIM = "https://nominatim.openstreetmap.org";
 const GUEST_KEY = "playpath_guest_profile";
+const COLORS = {
+  ink: "#462255",
+  plum: "#462255",
+  berry: "#AA4465",
+  salmon: "#FFA69E",
+  seafoam: "#93E1D8",
+  mint: "#DDFFF7",
+  seafoamDeep: "#477F78",
+  roseDeep: "#873A58",
+  roseMuted: "#8B526E",
+  plumMuted: "#765D80",
+  surface: "#FBFFFE",
+};
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const esc = (v) =>
@@ -11,9 +24,6 @@ const pct = (v) => Math.round(v * 100);
 // ---------- options used by the quiz and settings ----------
 const SPORTS = ["soccer", "basketball", "volleyball", "softball", "tennis", "swimming", "track", "lacrosse",
   "field hockey", "hockey", "golf", "gymnastics", "wrestling", "rugby", "netball", "multi"];
-const SPORT_ICONS = { soccer: "⚽", basketball: "🏀", volleyball: "🏐", softball: "🥎", tennis: "🎾", swimming: "🏊‍♀️",
-  track: "🏃‍♀️", lacrosse: "🥍", "field hockey": "🏑", hockey: "🏒", golf: "⛳", gymnastics: "🤸‍♀️", wrestling: "🤼‍♀️",
-  rugby: "🏉", netball: "🏐", multi: "✨" };
 const LEVELS = [
   ["beginner", "Beginner", "New to the sport or just learning the basics"],
   ["recreational", "Recreational", "I play for fun in a local league or at school"],
@@ -32,8 +42,8 @@ const COMPETITIONS = [
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const TIMES = [["morning", "Morning"], ["afternoon", "Afternoon"], ["evening", "Evening"]];
 const TRANSPORT = [
-  ["car", "🚗", "I drive"], ["parent", "👨‍👩‍👧", "Family drives me"], ["carpool", "🚙", "Carpool"],
-  ["transit", "🚌", "Bus / train"], ["bike_walk", "🚲", "Bike or walk"],
+  ["car", "I drive"], ["parent", "Family drives me"], ["carpool", "Carpool"],
+  ["transit", "Bus / train"], ["bike_walk", "Bike or walk"],
 ];
 const BARRIERS = [
   ["cost", "Cost is a concern"], ["transport", "Getting there is hard"], ["time", "Limited free time"],
@@ -129,17 +139,17 @@ function makeMap(el, opts = {}) {
   return map;
 }
 function scoreColor(s) {
-  if (s >= 85) return "#1b7f4b";
-  if (s >= 70) return "#4c9a2a";
-  if (s >= 55) return "#d49a1a";
-  if (s >= 40) return "#d9682b";
-  return "#a33a3a";
+  if (s >= 85) return COLORS.plum;
+  if (s >= 70) return COLORS.berry;
+  if (s >= 55) return "#873A68";
+  if (s >= 40) return "#754C7E";
+  return "#60466F";
 }
 
 // ---------- shared UI ----------
-const LOGO = `<svg class="logo" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="19" fill="#12443d"/>
-  <path d="M10 28 C16 28 14 13 21 13 S27 22 31 12" fill="none" stroke="#f4efe6" stroke-width="3" stroke-linecap="round"/>
-  <circle cx="31" cy="12" r="3.2" fill="#d45b45"/></svg>`;
+const LOGO = `<svg class="logo" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="19" fill="${COLORS.plum}"/>
+  <path d="M10 28 C16 28 14 13 21 13 S27 22 31 12" fill="none" stroke="${COLORS.mint}" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="31" cy="12" r="3.2" fill="${COLORS.salmon}"/></svg>`;
 
 function renderNav(current) {
   const hasProfile = !!state.profile?.sport;
@@ -147,7 +157,7 @@ function renderNav(current) {
   const link = (view, href, text) => `<a href="${href}" class="${current === view ? "on" : ""}">${text}</a>`;
   let links;
   if (signedIn || hasProfile) {
-    links = link("dashboard", "#/dashboard", "Dashboard") + link("explore", "#/explore", "Explore map") + link("settings", "#/settings", "Settings") +
+    links = link("dashboard", "#/dashboard", "Dashboard") + link("simulate", "#/simulate", "What if?") + link("explore", "#/explore", "Explore map") + link("settings", "#/settings", "Settings") +
       (signedIn ? `<button class="ghost small" data-action="signout">Sign out</button>`
                 : `<a class="btn small" href="#/signup">Save my plan</a>`);
   } else {
@@ -156,7 +166,7 @@ function renderNav(current) {
   }
   $("#nav").innerHTML = `<div class="nav-inner shell">
       <a class="brand" href="${signedIn || hasProfile ? "#/dashboard" : "#/"}">${LOGO}<span>PlayPath</span></a>
-      <button class="nav-toggle" aria-label="Menu" data-action="menu">☰</button>
+      <button class="nav-toggle" aria-label="Menu" data-action="menu">Menu</button>
       <nav class="nav-links">${links}</nav>
     </div>
     ${!signedIn && hasProfile ? `<div class="guest-bar">You're browsing as a guest. Your answers are saved only in this browser. <a href="#/signup">Create an account</a> to keep them.</div>` : ""}`;
@@ -192,8 +202,8 @@ const radioValue = (root, name) => $(`input[name="${name}"]:checked`, root)?.val
 function homeField(home = {}) {
   return `<div class="home-row">
       <input id="home-input" placeholder="City, e.g. Dallas, TX" value="${esc(home.label || "")}" autocomplete="off"/>
-      <button type="button" class="ghost small" id="home-locate">📍 Use my location</button>
-    </div><p class="hint" id="home-status">${home.lat != null ? `✓ Saved: ${esc(home.label)}${home.country ? `, ${esc(home.country)}` : ""}` : "Type your city and press Enter. We only use it to measure distance."}</p>`;
+      <button type="button" class="ghost small" id="home-locate">Use my location</button>
+    </div><p class="hint" id="home-status">${home.lat != null ? `Saved: ${esc(home.label)}${home.country ? `, ${esc(home.country)}` : ""}` : "Type your city and press Enter. We only use it to measure distance."}</p>`;
 }
 function wireHomeField(root, onSet) {
   const status = $("#home-status", root);
@@ -205,7 +215,7 @@ function wireHomeField(root, onSet) {
       const rev = await reverseGeocode(c.latitude, c.longitude);
       const home = { lat: c.latitude, lng: c.longitude, ...rev };
       input.value = home.label;
-      status.textContent = `✓ Using ${home.label}${home.country ? `, ${home.country}` : ""}`;
+      status.textContent = `Using ${home.label}${home.country ? `, ${home.country}` : ""}`;
       onSet(home);
     } catch (err) { status.textContent = err.message; }
   });
@@ -216,7 +226,7 @@ function wireHomeField(root, onSet) {
     try {
       const hit = await geocode(q);
       if (!hit) { status.textContent = `Couldn't find "${q}". Try adding the state or country.`; return; }
-      status.textContent = `✓ Found ${hit.label}${hit.country ? `, ${hit.country}` : ""}`;
+      status.textContent = `Found ${hit.label}${hit.country ? `, ${hit.country}` : ""}`;
       onSet({ lat: hit.lat, lng: hit.lng, label: hit.label, country: hit.country });
     } catch (err) { status.textContent = err.message; }
   };
@@ -252,9 +262,9 @@ views.landing = () => `
       <a class="textlink" href="#/quiz" data-guest="1">or continue as a guest →</a>
     </div>
     <div class="hero-art" aria-hidden="true">
-      <div class="hero-card"><span class="score" style="background:#1b7f4b">94</span><div><b>Dallas Cup Girls Divisions</b><small>Tournament · 9 mi · travel</small></div></div>
-      <div class="hero-card"><span class="score" style="background:#4c9a2a">82</span><div><b>YMCA Youth Soccer (Girls)</b><small>Recreation · local chapter</small></div></div>
-      <div class="hero-card"><span class="score" style="background:#d49a1a">67</span><div><b>College ID Camp</b><small>College · 450 mi</small></div></div>
+      <div class="hero-card"><span class="score" style="background:${scoreColor(94)}">94</span><div><b>Dallas Cup Girls Divisions</b><small>Tournament · 9 mi · travel</small></div></div>
+      <div class="hero-card"><span class="score" style="background:${scoreColor(82)}">82</span><div><b>YMCA Youth Soccer (Girls)</b><small>Recreation · local chapter</small></div></div>
+      <div class="hero-card"><span class="score" style="background:${scoreColor(67)}">67</span><div><b>College ID Camp</b><small>College · 450 mi</small></div></div>
       <p class="hero-note">Example scores. Yours depend on your answers.</p>
     </div>
   </section>
@@ -335,7 +345,7 @@ views.login.after = views.signup.after = () => {
 // ----- quiz -----
 const QUIZ_STEPS = [
   { title: "What sport do you play, or want to play?",
-    render: (p) => `<div class="chips grid4">${SPORTS.map((s) => chip("sport", s, `${SPORT_ICONS[s]} ${s === "multi" ? "Not sure yet" : s}`, p.sport === s, "radio")).join("")}</div>`,
+     render: (p) => `<div class="chips grid4">${SPORTS.map((s) => chip("sport", s, s === "multi" ? "Not sure yet" : s, p.sport === s, "radio")).join("")}</div>`,
     read: (r, p) => { p.sport = radioValue(r, "sport"); return p.sport ? null : "Pick a sport (or “Not sure yet”)."; } },
   { title: "How old are you?",
     render: (p) => `<input class="big-input" name="age" type="number" min="5" max="80" inputmode="numeric" value="${p.age ?? ""}" placeholder="14"/>
@@ -386,7 +396,7 @@ const QUIZ_STEPS = [
     },
     read: (r, p) => { p.max_distance_mi = Number($("[name=distance]", r).value); return p.home?.lat != null ? null : "Add your city (press Enter after typing) or use your location."; } },
   { title: "How will you get there?",
-    render: (p) => `<div class="options three">${TRANSPORT.map(([v, i, l]) => `<label class="option center"><input type="radio" name="transport" value="${v}" ${p.transport === v ? "checked" : ""}/><span><em>${i}</em><b>${l}</b></span></label>`).join("")}</div>`,
+     render: (p) => `<div class="options three">${TRANSPORT.map(([v, label]) => `<label class="option center"><input type="radio" name="transport" value="${v}" ${p.transport === v ? "checked" : ""}/><span><b>${label}</b></span></label>`).join("")}</div>`,
     read: (r, p) => { p.transport = radioValue(r, "transport"); return p.transport ? null : "Choose how you'll usually travel."; } },
   { title: "Anything that makes playing harder? And what's your goal?", sub: "Optional. This helps us suggest the right programs.",
     render: (p) => `<div class="chips">${BARRIERS.map(([v, l]) => chip("barriers", v, l, p.barriers.includes(v))).join("")}</div>
@@ -438,16 +448,16 @@ views.dashboard.after = async () => {
     ? plan.sessions.map((s) => `<a class="session" href="#/opportunity/${encodeURIComponent(s.id)}">
         <div class="session-day"><b>${s.day}</b><small>${esc(s.time)}</small></div>
         <div class="session-body"><strong>${esc(s.name)}</strong>
-          <span class="meta">📍 ${esc(s.distance)} · 💲 ${esc(s.cost)}</span>
+          <span class="meta">Distance: ${esc(s.distance)} · Cost: ${esc(s.cost)}</span>
           <span class="meta muted">Your free slot. Confirm the practice time on the program's site.</span></div>
         <span class="score sm" style="background:${scoreColor(s.compatibility)}">${s.compatibility}</span></a>`).join("")
     : `<p class="empty">${plan.no_slots ? "Add your free times in Settings to get a weekly plan." : "No eligible weekly programs within your travel range yet. Try a bigger distance in Settings, or check the map."}</p>`;
   const up = plan.step_up;
   $("#dash").innerHTML = `
     <div class="dash-head">
-      <div><p class="kicker">Your plan · ${esc(p.sport)} · age ${esc(p.age)}</p><h1>Hi ${esc(name)} 👋</h1>
+      <div><p class="kicker">Your plan · ${esc(p.sport)} · age ${esc(p.age)}</p><h1>Hi ${esc(name)}</h1>
       <p class="lede">Built from your quiz answers and ranked against every program in our database.</p></div>
-      <div class="dash-actions"><a class="btn ghost small" href="#/settings">Edit answers</a><a class="btn small" href="#/explore">Open map</a></div>
+      <div class="dash-actions"><a class="btn ghost small" href="#/settings">Edit answers</a><a class="btn small" href="#/simulate">Try a what-if</a><a class="btn small" href="#/explore">Open map</a></div>
     </div>
     <div class="dash-grid">
       <div class="panel span2"><h2>This week</h2><div class="sessions">${sessions}</div></div>
@@ -465,12 +475,135 @@ views.dashboard.after = async () => {
   wirePathway();
 };
 
+views.simulate = () => {
+  if (!state.profile?.sport) {
+    return `<section class="quiz"><p class="kicker">What-if simulator</p><h1>Build a plan first</h1>
+      <p class="lede">Answer the quiz to explore how changes could affect your matches.</p>
+      <a class="btn mt" href="#/quiz">Take the quiz</a></section>`;
+  }
+  const profile = state.profile;
+  const transport = profile.transport || "car";
+  return `<section class="simulator">
+    <div class="dash-head">
+      <div><p class="kicker">What-if simulator</p><h1>Try a different plan</h1>
+        <p class="lede">Explore changes without saving them to your profile.</p></div>
+      <div class="dash-actions"><a class="btn ghost small" href="#/dashboard">Back to dashboard</a></div>
+    </div>
+    <div class="simulator-grid">
+      <form class="panel sim-controls" id="simulator-form">
+        <h2>Change your situation</h2>
+        <p class="hint">Results update shortly after you stop adjusting the controls.</p>
+        <fieldset class="sim-fieldset"><legend>Free time</legend>${availabilityGrid(profile.availability || [])}</fieldset>
+        <div class="sim-number-grid">
+          <label class="stack" for="sim-budget">Budget per program (USD)
+            <input id="sim-budget" type="number" min="0" step="25" value="${profile.budget_usd ?? ""}" placeholder="No limit" />
+          </label>
+          <label class="stack" for="sim-distance">Maximum travel distance (miles)
+            <input id="sim-distance" type="number" min="0.1" step="5" value="${profile.max_distance_mi ?? ""}" placeholder="Use transport limit" />
+          </label>
+        </div>
+        <label class="stack" for="sim-transport">How you get there
+          <select id="sim-transport">${TRANSPORT.map(([value, label]) =>
+            `<option value="${esc(value)}" ${transport === value ? "selected" : ""}>${esc(label)}</option>`).join("")}</select>
+        </label>
+      </form>
+      <section class="panel sim-results" id="simulator-results" aria-live="polite" aria-busy="true">
+        <p class="loading">Comparing plans…</p>
+      </section>
+    </div>
+  </section>`;
+};
+views.simulate.after = () => {
+  if (!state.profile?.sport) return;
+  const form = $("#simulator-form");
+  const results = $("#simulator-results");
+  let timer;
+  let requestVersion = 0;
+
+  const readOverrides = () => {
+    const base = state.profile;
+    const overrides = {};
+    const availability = checkedValues(form, "availability").sort();
+    const originalAvailability = [...(base.availability || [])].sort();
+    if (JSON.stringify(availability) !== JSON.stringify(originalAvailability)) overrides.availability = availability;
+
+    const readNumber = (selector) => {
+      const value = $(selector, form).value.trim();
+      return value === "" ? null : Number(value);
+    };
+    const budget = readNumber("#sim-budget");
+    if (budget !== base.budget_usd) overrides.budget_usd = budget;
+    const distance = readNumber("#sim-distance");
+    if (distance !== base.max_distance_mi) overrides.max_distance_mi = distance;
+    const transport = $("#sim-transport", form).value;
+    if (transport !== (base.transport || "car")) overrides.transport = transport;
+    return overrides;
+  };
+
+  const renderResults = (data) => {
+    const diff = data.diff;
+    const scoreDelta = diff.score_improvement > 0 ? `+${diff.score_improvement}` : String(diff.score_improvement);
+    const gained = diff.gained.length
+      ? diff.gained.map((program) => miniCard(program)).join("")
+      : `<p class="empty">No new weekly programs.</p>`;
+    const lost = diff.lost.length
+      ? diff.lost.map((program) => miniCard(program)).join("")
+      : `<p class="empty">No weekly programs removed.</p>`;
+    const suggestions = data.sensitivity.length
+      ? `<ol class="sim-suggestions">${data.sensitivity.map((item) =>
+        `<li><strong>${esc(item.label)}</strong><span>Best match: ${item.score_before} → ${item.score_after} (+${item.improvement})</span></li>`).join("")}</ol>`
+      : `<p class="empty">No single change in the tested range raises your current best-match score.</p>`;
+    const weeksBefore = diff.pathway_weeks_before == null ? "Not estimated" : `${diff.pathway_weeks_before} weeks`;
+    const weeksAfter = diff.pathway_weeks_after == null ? "Not estimated" : `${diff.pathway_weeks_after} weeks`;
+    results.innerHTML = `
+      <p class="kicker">Plan comparison</p><h2>What changed</h2>
+      <div class="sim-metrics">
+        <div><span>Best match</span><strong>${diff.best_score_before} → ${diff.best_score_after}</strong><small>${scoreDelta} points</small></div>
+        <div><span>Available plan slots</span><strong>${diff.sessions_before} → ${diff.sessions_after}</strong><small>Based on your free-time answers</small></div>
+        <div><span>Pathway length</span><strong>${esc(weeksBefore)} → ${esc(weeksAfter)}</strong><small>Weeks between steps</small></div>
+      </div>
+      <div class="sim-program-diff">
+        <section><h3>New in your weekly plan</h3>${gained}</section>
+        <section><h3>No longer in your weekly plan</h3>${lost}</section>
+      </div>
+      <h3>Changes with the biggest score gains</h3>${suggestions}
+      <p class="hint sim-note">${data.notes.map(esc).join(" ")}</p>`;
+    results.setAttribute("aria-busy", "false");
+  };
+
+  const scheduleUpdate = () => {
+    const version = ++requestVersion;
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      results.setAttribute("aria-busy", "true");
+      results.innerHTML = `<p class="loading">Comparing plans…</p>`;
+      try {
+        const data = await api("/api/simulate", {
+          method: "POST",
+          body: { quiz: state.profile, overrides: readOverrides() },
+        });
+        if (version === requestVersion) renderResults(data);
+      } catch (err) {
+        if (version === requestVersion) {
+          results.innerHTML = `<p class="form-error" role="alert">${esc(err.message)}</p>`;
+          results.setAttribute("aria-busy", "false");
+        }
+      }
+    }, 300);
+  };
+
+  form.addEventListener("submit", (event) => event.preventDefault());
+  form.addEventListener("input", scheduleUpdate);
+  form.addEventListener("change", scheduleUpdate);
+  scheduleUpdate();
+};
+
 function pathwayHtml(steps) {
   return `<div class="pathway">${steps.map((s, i) => `
     <div class="pstep ${s.status}${s.is_goal ? " goal" : ""}">
-      ${s.status === "current" ? `<span class="here">📍 You are here</span>` : ""}
-      ${s.is_goal ? `<span class="flag">🏁 Goal</span>` : ""}
-      <span class="pdot">${s.status === "past" ? "✓" : i + 1}</span>
+      ${s.status === "current" ? `<span class="here">Current stage</span>` : ""}
+      ${s.is_goal ? `<span class="flag">Goal</span>` : ""}
+      <span class="pdot${s.status === "past" ? " done" : ""}">${s.status === "past" ? "Done" : i + 1}</span>
       <b>${esc(s.label)}</b>
       ${s.program ? `<a href="#/opportunity/${encodeURIComponent(s.program.id)}">${esc(s.program.name)}</a>
         <small class="program-fit">Best feasible match${s.program.fit == null ? "" : ` · ${esc(s.program.fit)}% fit`}</small>`
@@ -531,9 +664,9 @@ views.opportunity.after = async (id) => {
       <div class="panel">
         <h2>${personal ? "Why it matches you" : "How it scores"}</h2>
         ${!personal ? `<p class="hint"><a href="#/quiz">Take the quiz</a> to get a personal score.</p>` : ""}
-        ${o.reasons.strong.length ? `<p class="why good">✓ Strong on ${esc(o.reasons.strong.join(", "))}</p>` : ""}
-        ${o.reasons.weak.length ? `<p class="why weak">✗ Weaker on ${esc(o.reasons.weak.join(", "))}</p>` : ""}
-        ${flags.map((f) => `<p class="why warn">⚠ ${esc(f)}</p>`).join("")}
+        ${o.reasons.strong.length ? `<p class="why good">Strong on ${esc(o.reasons.strong.join(", "))}</p>` : ""}
+        ${o.reasons.weak.length ? `<p class="why weak">Weaker on ${esc(o.reasons.weak.join(", "))}</p>` : ""}
+        ${flags.map((f) => `<p class="why warn">Check: ${esc(f)}</p>`).join("")}
         <div class="factor-bars">${Object.entries(o.factors).map(([k, v]) => `<div class="bar-row"><span>${k}</span><i style="width:${pct(v)}%"></i><b>${pct(v)}</b></div>`).join("")}</div>
       </div>
       <div class="panel span3"><h2>Your pathway</h2>${personal ? pathwayHtml(data.pathway) : `<p class="empty">Take the quiz to see your pathway.</p>`}
@@ -543,12 +676,12 @@ views.opportunity.after = async (id) => {
   if (personal) wirePathway();
   const map = makeMap($("#opp-map"), { scrollWheelZoom: false });
   const pt = [o.lat, o.lng];
-  L.circleMarker(pt, { radius: 11, color: "#14201e", weight: 2, fillColor: TYPE_COLORS[o.type], fillOpacity: 0.95 }).addTo(map).bindPopup(esc(o.name));
+  L.circleMarker(pt, { radius: 11, color: COLORS.ink, weight: 2, fillColor: TYPE_COLORS[o.type], fillOpacity: 0.95 }).addTo(map).bindPopup(esc(o.name));
   const home = state.profile?.home;
   if (home?.lat != null && !localChapters) {
     const h = [home.lat, home.lng];
-    L.circleMarker(h, { radius: 8, color: "#d45b45", fillColor: "#fff", fillOpacity: 1, weight: 3 }).addTo(map).bindPopup("Home");
-    L.polyline([h, pt], { color: "#d45b45", weight: 2, dashArray: "6 6" }).addTo(map);
+    L.circleMarker(h, { radius: 8, color: COLORS.berry, fillColor: COLORS.surface, fillOpacity: 1, weight: 3 }).addTo(map).bindPopup("Home");
+    L.polyline([h, pt], { color: COLORS.berry, weight: 2, dashArray: "6 6" }).addTo(map);
     map.fitBounds(L.latLngBounds([h, pt]).pad(0.3), { maxZoom: 11 });
   } else map.setView(pt, 10);
 };
@@ -578,20 +711,23 @@ views.explore.after = () => {
   const clusters = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 45,
     iconCreateFunction: (c) => { const n = c.getChildCount(), s = n < 10 ? 30 : n < 50 ? 38 : 46;
       return L.divIcon({ html: `<span>${n}</span>`, className: "cluster", iconSize: [s, s] }); } }).addTo(map);
-  const heat = L.heatLayer([], { radius: 28, blur: 22, maxZoom: 9, minOpacity: 0.25 });
+  const heat = L.heatLayer([], {
+    radius: 28, blur: 22, maxZoom: 9, minOpacity: 0.25,
+    gradient: { 0.2: COLORS.seafoam, 0.5: COLORS.salmon, 0.75: COLORS.berry, 1: COLORS.plum },
+  });
   const homeLayer = L.layerGroup().addTo(map);
   L.control.layers(map._baseLayers, { Opportunities: clusters, "Density heatmap": heat, "Home & radius": homeLayer }).addTo(map);
   L.control.scale().addTo(map);
 
-  const affordColor = (a) => (a >= 0.95 ? "#1b7f4b" : a >= 0.8 ? "#6aa84f" : a >= 0.5 ? "#d49a1a" : "#c0392b");
+  const affordColor = (a) => (a >= 0.95 ? COLORS.seafoamDeep : a >= 0.8 ? "#687D78" : a >= 0.5 ? COLORS.berry : COLORS.roseDeep);
   const colorFor = (i) => ex.mode === "score" ? scoreColor(i.compatibility) : ex.mode === "affordability" ? affordColor(i.affordability)
-    : ex.mode === "eligibility" ? (i.eligible ? "#1b7f4b" : i.residency_ok ? "#d49a1a" : "#8a8a8a") : TYPE_COLORS[i.type] || "#888";
+    : ex.mode === "eligibility" ? (i.eligible ? COLORS.plum : i.residency_ok ? COLORS.salmon : COLORS.plumMuted) : TYPE_COLORS[i.type] || COLORS.plumMuted;
   const legend = () => {
     const row = (c, t) => `<div class="legend-row"><span class="swatch" style="background:${c}"></span>${t}</div>`;
     const sets = {
-      score: ["Compatibility", [["#1b7f4b", "85–100"], ["#4c9a2a", "70–84"], ["#d49a1a", "55–69"], ["#d9682b", "40–54"], ["#a33a3a", "under 40"]]],
-      affordability: ["Cost", [["#1b7f4b", "Free"], ["#6aa84f", "Low"], ["#d49a1a", "Moderate / unknown"], ["#c0392b", "High"]]],
-      eligibility: ["Eligibility", [["#1b7f4b", "Eligible"], ["#d49a1a", "Age or distance outside range"], ["#8a8a8a", "Residency / not joinable"]]],
+      score: ["Compatibility", [[COLORS.plum, "85–100"], [COLORS.berry, "70–84"], ["#873A68", "55–69"], ["#754C7E", "40–54"], ["#60466F", "under 40"]]],
+      affordability: ["Cost", [[COLORS.seafoamDeep, "Free"], ["#687D78", "Low"], [COLORS.berry, "Moderate / unknown"], [COLORS.roseDeep, "High"]]],
+      eligibility: ["Eligibility", [[COLORS.plum, "Eligible"], [COLORS.salmon, "Age or distance outside range"], [COLORS.plumMuted, "Residency / not joinable"]]],
       type: ["Type", Object.entries(TYPE_COLORS).map(([t, c]) => [c, t])],
     };
     const [title, rows] = sets[ex.mode];
@@ -601,7 +737,7 @@ views.explore.after = () => {
   function draw(fit) {
     clusters.clearLayers(); homeLayer.clearLayers(); ex.markers.clear();
     ex.items.forEach((i) => {
-      const m = L.circleMarker([i.lat, i.lng], { radius: 5 + i.compatibility / 12, color: i.eligible ? "#14201e" : "#777",
+      const m = L.circleMarker([i.lat, i.lng], { radius: 5 + i.compatibility / 12, color: i.eligible ? COLORS.ink : COLORS.plumMuted,
         weight: i.eligible ? 1.5 : 1, dashArray: i.eligible ? null : "2 3", fillColor: colorFor(i), fillOpacity: i.eligible ? 0.9 : 0.55 })
         .bindPopup(`<div class="pop"><strong>${i.compatibility} · ${esc(i.name)}</strong><br>${esc(i.type)} · ${esc(i.city)}, ${esc(i.country)}<br>${esc(i.cost_label)}<br><a href="#/opportunity/${encodeURIComponent(i.id)}">View details →</a></div>`);
       m.on("click", () => highlight(i.id));
@@ -610,8 +746,8 @@ views.explore.after = () => {
     heat.setLatLngs(ex.items.map((i) => [i.lat, i.lng, 0.3 + i.compatibility / 140]));
     const p = ex.profile;
     if (p.lat != null) {
-      L.circleMarker([p.lat, p.lng], { radius: 9, color: "#d45b45", fillColor: "#fff", fillOpacity: 1, weight: 3 }).bindPopup("Home").addTo(homeLayer);
-      if (p.max_distance_km) L.circle([p.lat, p.lng], { radius: p.max_distance_km * 1000, color: "#d45b45", weight: 1.5, fillOpacity: 0.04, dashArray: "6 6" }).addTo(homeLayer);
+      L.circleMarker([p.lat, p.lng], { radius: 9, color: COLORS.berry, fillColor: COLORS.surface, fillOpacity: 1, weight: 3 }).bindPopup("Home").addTo(homeLayer);
+      if (p.max_distance_km) L.circle([p.lat, p.lng], { radius: p.max_distance_km * 1000, color: COLORS.berry, weight: 1.5, fillOpacity: 0.04, dashArray: "6 6" }).addTo(homeLayer);
       if (fit) map.flyToBounds(L.latLngBounds([[p.lat, p.lng], ...ex.items.filter((i) => i.eligible).slice(0, 10).map((i) => [i.lat, i.lng])]).pad(0.2), { maxZoom: 9, duration: 0.6 });
     }
   }
@@ -625,8 +761,8 @@ views.explore.after = () => {
       <div class="body"><span class="pill" style="background:${TYPE_COLORS[i.type]}">${esc(i.type)}</span><span class="pill outline">${esc(i.sport)}</span>
         <h3>${n + 1}. ${esc(i.name)}</h3>
         <p class="meta">${esc(i.city)}, ${esc(i.country)}${i.distance_mi != null ? ` · ${i.distance_mi.toLocaleString()} mi` : ""} · ages ${i.min_age}–${i.max_age} · ${esc(i.cost_label)}</p>
-        ${i.reasons.strong.length ? `<p class="why good">✓ ${esc(i.reasons.strong.join(", "))}</p>` : ""}
-        ${!i.eligible ? `<p class="why warn">⚠ Check eligibility</p>` : ""}
+        ${i.reasons.strong.length ? `<p class="why good">Strong match: ${esc(i.reasons.strong.join(", "))}</p>` : ""}
+        ${!i.eligible ? `<p class="why warn">Check eligibility</p>` : ""}
         <p class="links"><a href="#/opportunity/${encodeURIComponent(i.id)}">Details →</a></p></div></li>`).join("");
   }
   function stats(a) {
@@ -701,7 +837,7 @@ views.settings = () => {
       <div class="panel"><h2>Location & travel</h2>
         <h3>Home</h3>${homeField(p.home)}
         <label class="stack">Max travel distance (miles)<input name="max_distance_mi" type="number" min="1" value="${p.max_distance_mi ?? ""}"/></label>
-        <h3>How I get there</h3><div class="chips">${TRANSPORT.map(([v, i, l]) => chip("transport", v, `${i} ${l}`, p.transport === v, "radio")).join("")}</div>
+        <h3>How I get there</h3><div class="chips">${TRANSPORT.map(([v, label]) => chip("transport", v, label, p.transport === v, "radio")).join("")}</div>
       </div>
       <div class="panel"><h2>Challenges</h2><div class="chips">${BARRIERS.map(([v, l]) => chip("barriers", v, l, p.barriers.includes(v))).join("")}</div></div>
       <div class="save-bar"><span id="save-status" role="status"></span><a class="ghost btn" href="#/quiz" id="retake">Retake quiz</a><button class="btn" type="submit">Save changes</button></div>
@@ -732,7 +868,7 @@ views.settings.after = () => {
     try {
       if (state.user && f.get("name") != null) state.user = (await api("/api/me", { method: "PUT", body: { name: f.get("name") } })).user;
       await saveProfile(next);
-      $("#save-status").textContent = "✓ Saved. Your plan is updated.";
+      $("#save-status").textContent = "Saved. Your plan is updated.";
       renderNav("settings");
     } catch (err) { $("#save-status").textContent = err.message; }
   });
@@ -741,7 +877,7 @@ views.settings.after = () => {
 // ---------- router ----------
 const ROUTES = [
   [/^#\/?$/, "landing"], [/^#\/login$/, "login"], [/^#\/signup$/, "signup"], [/^#\/quiz$/, "quiz"],
-  [/^#\/dashboard$/, "dashboard"], [/^#\/explore$/, "explore"], [/^#\/settings$/, "settings"],
+  [/^#\/dashboard$/, "dashboard"], [/^#\/simulate$/, "simulate"], [/^#\/explore$/, "explore"], [/^#\/settings$/, "settings"],
   [/^#\/opportunity\/(.+)$/, "opportunity"],
 ];
 async function render() {
