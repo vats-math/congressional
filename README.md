@@ -2,97 +2,118 @@
 
 Congressional App Challenge submission by Sharanya Vats, Vanshika Pundru, Shruthi Chava, and Sahanaa Rao.
 
-PlayPath matches women and girls with sports opportunities from schools, colleges,
-recreation departments, nonprofits, clubs, and national pathways. You describe
-yourself in plain English, for example *"I'm 14, play recreational soccer and want
-to find travel opportunities near Dallas"*. The app extracts a profile, scores
-every program in its SQLite database with a multi-factor ranking algorithm, and
-plots the results on an interactive world map.
+PlayPath helps girls and women find sports programs they can actually join: school teams,
+rec leagues, clubs, camps, nonprofits, and college pathways. An athlete answers a short quiz
+(sport, age, level, free time, budget, how she gets around, what makes playing hard). The app
+filters out what she can't do, scores the rest, builds a weekly plan around her free time, maps
+a pathway toward her goal, and lets her ask "what if?"
 
-**No LLM is used.** Every recommendation is a real row in the database. Nothing
-is generated.
+> **TEAM: write this part yourselves.** In 3–5 sentences, explain why *you* built this: a real
+> moment, a teammate who quit, a sport you couldn't find. Judges read this first.
 
 ## Screens
 
-| Route | Screen |
+| Address | Screen |
 |---|---|
-| `#/` | Landing page: logo, navigation, purpose, why we built it, calls to action, how it works |
-| `#/login`, `#/signup` | Welcome back / create account, or continue as a guest |
-| `#/quiz` | 9-question onboarding: sport, age, level, competitions, weekly availability, cost, home and distance, transport, challenges and goal |
-| `#/dashboard` | Weekly session cards (day, program, time slot, distance, cost), "try the next group" step-up, tips, pathway, best matches, upcoming events |
-| `#/opportunity/<id>` | When, where, cost, level, map with route from home, why it matches, pathway with "You are here" and "Change my goal", similar programs |
-| `#/explore` | World map plus ranked list with color modes, clustering, and heatmap |
-| `#/settings` | Account (name, sign out, delete) and every quiz answer, editable |
-
-Accounts use email and password (PBKDF2-hashed, HttpOnly session cookie, stored in SQLite).
-Guests keep their answers in the browser only.
-
-**Session times:** the database does not hold real practice schedules. The weekly
-plan places programs into the time slots *you* said you're free, and tells you to
-confirm the real practice times on the program's site.
+| `#/` | Landing page |
+| `#/login`, `#/signup` | Sign in, create an account, or continue as a guest |
+| `#/quiz` | 9-question onboarding |
+| `#/dashboard` | This week's sessions, next step, pathway, best matches, upcoming events |
+| `#/simulate` | What-if simulator: change free time, budget, distance or transport and compare plans |
+| `#/opportunity/<id>` | One program: facts, map with route from home, why it matches, similar programs |
+| `#/explore` | World map + ranked list, with color modes, clustering and a density heatmap |
+| `#/settings` | Account, plus every quiz answer, editable |
 
 ## How it works
 
 ```
-prompt + form ─► parser.py ─► profile ─┐
-                (regex/keyword NLP)    │
-                                       ▼
-source CSV/JSON ─► pipeline.py ─► SQLite ─► ranking.py ─► analysis.py ─► API ─► list + map
-                  extract/normalize/        9 weighted     pandas stats
-                  geocode/validate/dedupe   factors + TF-IDF
+quiz answers ─► fit.py (hard filters, then weighted fit) ─► plan.py (weekly plan + pathway) ─► API ─► screens
+                     ▲                                                ▲
+      data/local/*.csv (programs + weekly sessions)        main.py /api/simulate (what-if + sensitivity)
+      catalog.py (wider catalog) ─► pipeline.py ─► SQLite ─► ranking.py, recommender.py, analysis.py
+                                                    advisor.py (optional AI barrier detection, keyword fallback)
 ```
 
-| Module | What it does |
+| File | What it does |
 |---|---|
-| `app/parser.py` | Rule-based extraction of age, sport, skill, travel intent, budget, distance, home city, and program type from the prompt. Unknown places are flagged and geocoded worldwide in the browser (OpenStreetMap Nominatim). |
-| `app/pipeline.py` | Ingestion pipeline for new sources: extracts sport, type, ages, cost, skill, and travel from free text, geocodes, validates, dedupes, and loads into SQLite. |
-| `app/recommender.py` | Content-based recommender: TF-IDF and cosine similarity. Scores prompt relevance and powers "Similar programs". |
-| `app/ranking.py` | Multi-factor score (0–100) built from sport, age, skill, travel, proximity, affordability, deadline, program type, and keyword relevance. Enforces eligibility rules: age range, max distance, residency for state and city programs, and same-country for national pathways. Ineligible results are capped. |
-| `app/plan.py` | Turns quiz answers into a ranking profile and weekly plan, then chooses a program-backed route through the seven pathway stages. Routes include estimated weeks and readiness notes, use feasible program fit scores, and show honest gaps when no program matches. A break longer than two years starts one stage lower. |
-| `app/auth.py` | Sign up, log in, sessions, saved profiles. |
-| `app/analysis.py` | Pandas analysis: score distribution, average score by type, cost bands, affordability index, country mix, and a density grid. |
-| `static/app.js` | Leaflet world map with street/satellite tiles, clustering, a density heatmap, a home radius, and color modes (type / score / affordability / eligibility). |
+| `app/fit.py` | Two stages. First, **hard filters** remove anything she can't do (wrong sport, age, no session fits her week, too far, past her ride cutoff) and record *why*. Then a **weighted fit score** ranks what's left: schedule 25%, distance 20%, budget 15%, experience 15%, transport 10%, intensity 10%, age 5%. |
+| `app/plan.py` | Weekly plan in her free slots, the "try the next group" step, and the pathway through the seven stages with estimated weeks. |
+| `app/main.py` | The API. `/api/simulate` copies the quiz, applies one change, re-plans, diffs the two plans, and tests single changes to find the top 3 that raise her best score. |
+| `app/local_data.py` | Loads the verified Forsyth County programs and their weekly sessions. |
+| `app/ranking.py`, `app/recommender.py`, `app/analysis.py` | The wider catalog: 9-factor ranking, TF-IDF "similar programs", and pandas statistics for the map. |
+| `app/advisor.py` | Optional: reads what she types and tags barriers (cost, confidence, transport…). Uses an LLM through Groq if `GROQ_API_KEY` is set, otherwise keyword rules. It must quote her exact words as evidence. |
+| `static/js/` | The front end, split into modules (see below). |
 
-### Scoring weights
+### Front-end structure
 
-sport 22% · proximity 18% · age 16% · skill 11% · travel 11% · cost 10% ·
-keyword relevance 5% · deadline 4% · program type 3%.
+```
+static/js/
+  main.js        entry point: loads who is signed in, starts the router
+  router.js      maps #/address -> view
+  api.js         the only file that calls the server
+  state.js       signed-in user, quiz answers, quiz in progress
+  constants.js   sports, levels, days, brand colors
+  dom.js, geo.js, map.js, ui.js, nav.js   shared helpers and components
+  views/         one file per screen: landing, auth, quiz, dashboard, simulate,
+                 opportunity, explore, settings
+```
 
-Ineligible results are capped at 62. Programs that fail a residency rule are capped at 40.
+It uses plain ES modules (`<script type="module">`), with no build step and no framework, so anyone
+on the team can open a file and read it top to bottom.
 
-## Run the full Python app
+## Design choices
+
+- **Type: Barlow Condensed + Barlow.** The condensed face for headings and numbers looks like a
+  scoreboard or a jersey, which suits sports. Regular Barlow comes from the same family, so the
+  two always match.
+- **Color: three brand colors plus neutrals.** Plum `#462255` (primary, strong matches), berry
+  `#AA4465` (accents, good matches), seafoam `#93E1D8` (highlights, "free"). Text and backgrounds
+  are neutrals. Scores use only three steps (plum 80+, berry 60–79, gray under 60) so the color
+  means something at a glance. Program *types* on the map keep six separate colors, because six
+  categories can't be told apart with three.
+- **Spacing: one 4px scale** (`--space-1` … `--space-8` = 4, 8, 12, 16, 24, 32, 48, 64px) and two
+  corner sizes (4px, 8px). Everything snaps to it, so the layout looks consistent.
+- **No emoji, no gradients, no drop shadows.** Flat surfaces and plain labels.
+- **Honesty over polish.** A "92% match" for a program she can't attend would be a lie, so
+  infeasible programs are filtered out and explained, never ranked. Deadlines that have passed are
+  labeled "est." Gaps in our data are shown as gaps.
+
+## Tradeoffs
+
+- **Rules first, AI optional.** Matching, scoring and planning are deterministic rules we can
+  explain and test. The LLM only tags barriers, and the app works without it. Cost: the keyword
+  fallback misses unusual phrasing.
+- **Small but verified data vs. big but rough data.** The Forsyth County programs have real weekly
+  session times that we checked. The wider 99-program catalog covers more places but has no
+  practice times and approximate costs. Because the weekly plan and the simulator still use the
+  wider catalog, **adding a free day can't raise a score yet**. Moving them onto the Forsyth
+  sessions (`fit_catalog`) is the next step.
+- **No build step.** Plain JS modules are easy to read and need no install, but we don't get
+  type checking or bundling.
+- **Accounts in SQLite on one server.** Simple and private, but not built for many users at once.
+- **Free map tiles and geocoding** (CARTO, Esri, OpenStreetMap Nominatim). No API keys, but they
+  are rate-limited.
+
+## User testing
+
+We tested with real athletes. Their quotes, and what we changed because of them, are in
+[`USER_TESTING.md`](USER_TESTING.md).
+
+## Run it
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
 Open http://127.0.0.1:8000. Run the tests with `pytest`.
-
-## Adding real opportunities
-
-1. Fill in a CSV using `data/sources/TEMPLATE.csv`. Only `name`, `organization`,
-   `website`, and either `city` or `lat`/`lng` are required. Anything left blank
-   is extracted from the description where possible.
-2. Dry run: `python -m app.pipeline data/sources/your_file.csv`
-3. Load: `python -m app.pipeline data/sources/your_file.csv --load`
+On Replit: click **Run**. For the optional AI advisor, add `GROQ_API_KEY` under **Tools → Secrets**
+(never put the key in code).
 
 ## Known limitations
 
-- **The catalog is small and skewed.** It has 99 programs: 75 in the US and 63 for
-  soccer. Many sports and most countries have very few or zero entries, so
-  someone in Lagos who wants volleyball gets nothing nearby. Growing the data is
-  the most important next step.
-- **Costs and deadlines are approximate.** They are typical published ranges
-  entered by hand, not live data. A date that has passed is rolled to next
-  year's cycle and labeled "est." Users must confirm on the official site.
-- **Umbrella organizations are pinned to their HQ.** AYSO, YMCA, NFHS, and national
-  governing bodies run local chapters. They are treated as available anywhere in
-  their country, but their map pin is the headquarters.
-- **There is no live scraping.** The pipeline normalizes data you export or
-  collect; it does not crawl websites.
-- **Geocoding of arbitrary places uses the public Nominatim service** from the
-  browser, which is rate-limited (about 1 request per second). For production,
-  self-host a geocoder or use a keyed service.
+- Verified session data covers one county. The wider catalog is mostly U.S. soccer.
+- Costs and deadlines are typical published ranges, so users must confirm on the official site.
+- Umbrella organizations (AYSO, YMCA, national governing bodies) are pinned to their headquarters
+  on the map.
+- No live scraping. New programs are added by hand through the CSV loaders.
