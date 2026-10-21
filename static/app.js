@@ -78,7 +78,7 @@ async function saveProfile(profile) {
 }
 
 const blankProfile = () => ({
-  sport: null, age: null, skill: null, competitions: [], availability: [], budget_usd: null,
+  sport: null, age: null, skill: null, years_since_played: null, competitions: [], availability: [], budget_usd: null,
   max_distance_mi: 25, transport: null, home: {}, barriers: [], goal_level: null, goal_text: "",
 });
 
@@ -343,8 +343,22 @@ const QUIZ_STEPS = [
     read: (r, p) => { const v = Number($("[name=age]", r).value); if (!v || v < 5 || v > 80) return "Enter an age between 5 and 80."; p.age = v; return null; } },
   { title: "What's your experience level?",
     render: (p) => `<div class="options">${LEVELS.map(([v, l, d]) => `<label class="option"><input type="radio" name="skill" value="${v}" ${p.skill === v ? "checked" : ""}/><span><b>${l}</b><small>${d}</small></span></label>`).join("")}</div>
+      <label class="stack">If you've taken a break, how long since you last played?
+        <select name="years_since_played">
+          <option value="" ${p.years_since_played == null ? "selected" : ""}>No long break</option>
+          <option value="1" ${p.years_since_played === 1 ? "selected" : ""}>About 1 year</option>
+          <option value="2" ${p.years_since_played === 2 ? "selected" : ""}>About 2 years</option>
+          <option value="3" ${p.years_since_played >= 3 ? "selected" : ""}>3 or more years</option>
+        </select>
+      </label>
       <label class="stack">Skills you want to work on (optional)<input name="goal_text" maxlength="300" value="${esc(p.goal_text)}" placeholder="e.g. footwork, speed, getting noticed by college coaches"/></label>`,
-    read: (r, p) => { p.skill = radioValue(r, "skill"); p.goal_text = $("[name=goal_text]", r).value.trim(); return p.skill ? null : "Choose the level closest to you."; } },
+    read: (r, p) => {
+      p.skill = radioValue(r, "skill");
+      const years = $("[name=years_since_played]", r).value;
+      p.years_since_played = years === "" ? null : Number(years);
+      p.goal_text = $("[name=goal_text]", r).value.trim();
+      return p.skill ? null : "Choose the level closest to you.";
+    } },
   { title: "What kinds of competition interest you?", sub: "Pick as many as you like.",
     render: (p) => `<div class="options two">${COMPETITIONS.map(([v, l, d]) => `<label class="option"><input type="checkbox" name="competitions" value="${v}" ${p.competitions.includes(v) ? "checked" : ""}/><span><b>${l}</b><small>${d}</small></span></label>`).join("")}</div>`,
     read: (r, p) => { p.competitions = checkedValues(r, "competitions"); return null; } },
@@ -458,7 +472,11 @@ function pathwayHtml(steps) {
       ${s.is_goal ? `<span class="flag">🏁 Goal</span>` : ""}
       <span class="pdot">${s.status === "past" ? "✓" : i + 1}</span>
       <b>${esc(s.label)}</b>
-      ${s.example ? `<a href="#/opportunity/${encodeURIComponent(s.example.id)}">${esc(s.example.name)}</a>` : `<small>No program in range</small>`}
+      ${s.program ? `<a href="#/opportunity/${encodeURIComponent(s.program.id)}">${esc(s.program.name)}</a>
+        <small class="program-fit">Best feasible match${s.program.fit == null ? "" : ` · ${esc(s.program.fit)}% fit`}</small>`
+        : `<small class="gap-note">${esc(s.gap || "No eligible program matches your answers yet.")}</small>`}
+      ${s.weeks == null ? `<small class="duration">Goal stage</small>` : `<small class="duration">About ${esc(s.weeks)} weeks to next step</small>`}
+      <small class="ready-note">${esc(s.ready_when)}</small>
     </div>${i < steps.length - 1 ? `<span class="arrow" aria-hidden="true">→</span>` : ""}`).join("")}</div>
     <div class="goal-row"><button type="button" class="ghost small" id="change-goal">Change my goal</button>
       <span id="goal-editor" hidden><select id="goal-select"><option value="">Just have fun</option>${LEVELS.map(([v, l]) => `<option value="${v}" ${state.profile?.goal_level === v ? "selected" : ""}>${l}</option>`).join("")}</select>
@@ -665,6 +683,12 @@ views.settings = () => {
           <label class="stack">Sport<select name="sport">${SPORTS.map((s) => `<option value="${s}" ${p.sport === s ? "selected" : ""}>${s === "multi" ? "Not sure / multi" : s}</option>`).join("")}</select></label>
           <label class="stack">Age<input name="age" type="number" min="5" max="80" value="${p.age ?? ""}"/></label>
           <label class="stack">Level<select name="skill">${LEVELS.map(([v, l]) => `<option value="${v}" ${p.skill === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+          <label class="stack">Years since you last played<select name="years_since_played">
+            <option value="" ${p.years_since_played == null ? "selected" : ""}>No long break</option>
+            <option value="1" ${p.years_since_played === 1 ? "selected" : ""}>About 1 year</option>
+            <option value="2" ${p.years_since_played === 2 ? "selected" : ""}>About 2 years</option>
+            <option value="3" ${p.years_since_played >= 3 ? "selected" : ""}>3 or more years</option>
+          </select></label>
           <label class="stack">Goal<select name="goal_level"><option value="">Just have fun</option>${LEVELS.map(([v, l]) => `<option value="${v}" ${p.goal_level === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         </div>
         <label class="stack">Skills I want to work on<input name="goal_text" maxlength="300" value="${esc(p.goal_text)}"/></label>
@@ -700,6 +724,7 @@ views.settings.after = () => {
     const next = {
       ...state.profile,
       sport: f.get("sport"), age: num("age"), skill: f.get("skill"), goal_level: f.get("goal_level") || null,
+      years_since_played: num("years_since_played"),
       goal_text: (f.get("goal_text") || "").trim(), competitions: checkedValues(form, "competitions"),
       budget_usd: num("budget_usd"), availability: checkedValues(form, "availability"), home,
       max_distance_mi: num("max_distance_mi"), transport: radioValue(form, "transport"), barriers: checkedValues(form, "barriers"),

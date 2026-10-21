@@ -138,6 +138,9 @@ label.stack { display: grid; gap: 6px; font-size: 14px; font-weight: 500; color:
 .pstep b { font-size: 14px; }
 .pstep a { font-size: 12px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .pstep small { color: var(--muted); }
+.pstep .duration { color: var(--pine); font-weight: 600; }
+.pstep .ready-note { max-width: 190px; line-height: 1.35; }
+.pstep .gap-note { color: var(--coral); }
 .pdot { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; background: var(--line); color: var(--ink); }
 .pstep.past { background: #eef5f1; }
 .pstep.past .pdot { background: var(--pine); color: #fff; }

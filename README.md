@@ -48,7 +48,7 @@ source CSV/JSON ─► pipeline.py ─► SQLite ─► ranking.py ─► analys
 | `app/pipeline.py` | Ingestion pipeline for new sources: extracts sport, type, ages, cost, skill, and travel from free text, geocodes, validates, dedupes, and loads into SQLite. |
 | `app/recommender.py` | Content-based recommender: TF-IDF and cosine similarity. Scores prompt relevance and powers "Similar programs". |
 | `app/ranking.py` | Multi-factor score (0–100) built from sport, age, skill, travel, proximity, affordability, deadline, program type, and keyword relevance. Enforces eligibility rules: age range, max distance, residency for state and city programs, and same-country for national pathways. Ineligible results are capped. |
-| `app/plan.py` | Turns quiz answers into a ranking profile, a weekly plan (respecting level, budget, and how far you can travel by your transport mode), a next-level suggestion, and the skill pathway. |
+| `app/plan.py` | Turns quiz answers into a ranking profile and weekly plan, then chooses a program-backed route through the seven pathway stages. Routes include estimated weeks and readiness notes, use feasible program fit scores, and show honest gaps when no program matches. A break longer than two years starts one stage lower. |
 | `app/auth.py` | Sign up, log in, sessions, saved profiles. |
 | `app/analysis.py` | Pandas analysis: score distribution, average score by type, cost bands, affordability index, country mix, and a density grid. |
 | `static/app.js` | Leaflet world map with street/satellite tiles, clustering, a density heatmap, a home radius, and color modes (type / score / affordability / eligibility). |

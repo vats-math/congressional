@@ -51,9 +51,16 @@ def test_plan_uses_availability_and_real_programs(client):
     assert [s["day"] for s in plan["sessions"]] == ["Tue", "Thu", "Sat"]
     assert all(s["id"] in ids for s in plan["sessions"])
     assert plan["step_up"]["level"] == "competitive"
-    statuses = {p["level"]: p["status"] for p in plan["pathway"]}
-    assert statuses["beginner"] == "past" and statuses["recreational"] == "current"
+    assert plan["pathway"][0]["stage"] == "rec_league"
+    assert plan["pathway"][-1]["stage"] == "club_league"
+    assert plan["pathway"][0]["status"] == "current"
+    assert plan["pathway"][-1]["is_goal"]
     assert any("Cost" in t for t in plan["tips"])
+
+
+def test_pathway_steps_back_after_three_year_break(client):
+    plan = client.post("/api/plan", json={**QUIZ, "years_since_played": 3}).json()
+    assert plan["pathway"][0]["stage"] == "camp"
 
 
 def test_bike_walk_limits_weekly_distance(client):
@@ -66,5 +73,6 @@ def test_bike_walk_limits_weekly_distance(client):
 def test_opportunity_detail(client):
     data = client.post("/api/opportunity/dallas-cup", json=QUIZ).json()
     assert data["opportunity"]["id"] == "dallas-cup"
-    assert len(data["pathway"]) == 5 and data["similar"]
+    assert data["pathway"][0]["stage"] == "rec_league"
+    assert data["pathway"][-1]["stage"] == "club_league" and data["similar"]
     assert client.post("/api/opportunity/nope", json=QUIZ).status_code == 404

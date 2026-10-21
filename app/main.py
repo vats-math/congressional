@@ -150,6 +150,7 @@ class Quiz(BaseModel):
     sport: Optional[str] = None
     age: Optional[int] = Field(default=None, ge=3, le=80)
     skill: Optional[str] = None
+    years_since_played: Optional[int] = Field(default=None, ge=0, le=50)
     competitions: list[str] = Field(default_factory=list)
     availability: list[str] = Field(default_factory=list)  # e.g. "Tue-evening"
     budget_usd: Optional[int] = Field(default=None, ge=0)
@@ -239,7 +240,7 @@ def put_profile(body: Quiz, playpath_session: Optional[str] = Cookie(default=Non
 @app.post("/api/plan")
 def plan(body: Quiz) -> dict[str, Any]:
     """Works for guests (profile kept in the browser) and signed-in users alike."""
-    return build_plan(body.model_dump(), fetch_all())
+    return build_plan(body.model_dump(), fetch_programs())
 
 @app.post("/api/fit")
 def fit(body: Quiz) -> dict[str, Any]:
@@ -248,7 +249,7 @@ def fit(body: Quiz) -> dict[str, Any]:
 
 @app.post("/api/opportunity/{opp_id}")
 def opportunity(opp_id: str, body: Quiz) -> dict[str, Any]:
-    rows = fetch_all()
+    rows = fetch_programs()
     if opp_id not in {r["id"] for r in rows}:
         raise HTTPException(404, "unknown opportunity")
     quiz = body.model_dump()
@@ -258,7 +259,7 @@ def opportunity(opp_id: str, body: Quiz) -> dict[str, Any]:
     sims = TfidfIndex(rows).similar(opp_id, k=4)
     return {
         "opportunity": item,
-        "pathway": pathway(quiz.get("skill"), quiz.get("goal_level"), ranked),
+        "pathway": pathway(quiz, rows),
         "similar": [
             {"id": i, "name": by_id[i]["name"], "compatibility": by_id[i]["compatibility"], "type": by_id[i]["type"]}
             for i, _ in sims

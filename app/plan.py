@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.ranking import SKILL_RANK, rank_catalog
+from app.ranking import rank_catalog
+from app.stages import STAGES, STAGE_LABELS
 
 LEVELS = ["beginner", "recreational", "competitive", "elite", "college"]
 LEVEL_LABELS = {
@@ -13,6 +14,49 @@ LEVEL_LABELS = {
     "elite": "Elite / academy",
     "college": "College",
 }
+SKILL_START_STAGE = {
+    "beginner": "intro_clinic",
+    "recreational": "rec_league",
+    "competitive": "intermediate_group",
+    "elite": "club_league",
+    "college": "club_league",
+}
+STAGE_INDEX = {stage: index for index, stage in enumerate(STAGES)}
+
+# Weeks are typical time spent at a stage before moving on, not a promise about
+# any individual athlete. Readiness notes describe the transition to the next stage.
+PATHWAY_GRAPH = {
+    "intro_clinic": (
+        {"to": "open_play", "weeks": 4, "ready_when": "Attend 4+ sessions and feel comfortable with the basic skills."},
+        {"to": "camp", "weeks": 2, "ready_when": "Complete a multi-day camp and practice the core skills."},
+    ),
+    "open_play": (
+        {"to": "camp", "weeks": 2, "ready_when": "Build consistency across 6+ drop-in sessions."},
+        {"to": "rec_league", "weeks": 6, "ready_when": "Feel ready to attend weekly and play with a team."},
+    ),
+    "camp": (
+        {"to": "rec_league", "weeks": 6, "ready_when": "Complete camp and demonstrate the rules and basic skills."},
+        {"to": "intermediate_group", "weeks": 8, "ready_when": "Use sport-specific skills confidently in controlled play."},
+    ),
+    "rec_league": (
+        {"to": "intermediate_group", "weeks": 8, "ready_when": "Attend 6+ games and feel ready for more structured practice."},
+        {"to": "school_team", "weeks": 10, "ready_when": "Practice consistently and prepare for school-team tryouts."},
+    ),
+    "intermediate_group": (
+        {"to": "school_team", "weeks": 8, "ready_when": "Meet the skills and fitness expectations for school-team tryouts."},
+        {"to": "club_league", "weeks": 12, "ready_when": "Be ready for regular practices, competitive play, and possible tryouts."},
+    ),
+    "school_team": (
+        {"to": "club_league", "weeks": 12, "ready_when": "Build experience and check local club-league tryout requirements."},
+    ),
+    "club_league": (),
+}
+_GOAL_TEXT_STAGES = (
+    (("school team", "school-team", "make varsity", "make the team"), "school_team"),
+    (("college", "recruit", "scholarship"), "club_league"),
+    (("club", "travel team", "tournament", "showcase", "elite"), "club_league"),
+    (("recreational", "rec league", "for fun"), "rec_league"),
+)
 COMPETITION_TYPES = {
     "rec_league": "recreation",
     "school_team": "school",
@@ -101,24 +145,150 @@ def next_level(skill: str | None) -> str | None:
     return LEVELS[i + 1] if i + 1 < len(LEVELS) else None
 
 
-def pathway(skill: str | None, goal: str | None, ranked: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    current = SKILL_RANK.get(skill or "beginner", 0)
-    target = SKILL_RANK.get(goal, None) if goal else None
+def starting_stage(skill: str | None, years_since_played: int | None = None) -> str:
+    """Map the athlete's experience to a program stage, stepping back after a long break."""
+    stage = SKILL_START_STAGE.get(skill or "beginner", "intro_clinic")
+    if years_since_played is not None and years_since_played > 2:
+        stage = STAGES[max(0, STAGE_INDEX[stage] - 1)]
+    return stage
+
+
+def goal_stage(
+    goal: str | None,
+    competitions: list[str] | None = None,
+    goal_text: str | None = None,
+    current_stage: str | None = None,
+) -> str:
+    """Resolve the athlete's stated goal and competition preferences to a catalog stage."""
+    text = (goal_text or "").casefold()
+    target = None
+    for phrases, stage in _GOAL_TEXT_STAGES:
+        if any(phrase in text for phrase in phrases):
+            target = stage
+            break
+
+    preferences = set(competitions or [])
+    if target is None:
+        if goal == "recreational":
+            target = "rec_league"
+        elif goal == "beginner":
+            target = "intro_clinic"
+        elif goal == "competitive":
+            if "school_team" in preferences:
+                target = "school_team"
+            elif preferences & {"club_travel", "tournaments", "college_recruiting"}:
+                target = "club_league"
+            else:
+                target = "intermediate_group"
+        elif goal in {"elite", "college"}:
+            target = "club_league"
+        elif "college_recruiting" in preferences or preferences & {"club_travel", "tournaments"}:
+            target = "club_league"
+        elif "school_team" in preferences:
+            target = "school_team"
+        elif "rec_league" in preferences:
+            target = "rec_league"
+        elif "community" in preferences:
+            target = "open_play"
+        else:
+            target = current_stage or "intro_clinic"
+
+    # A pathway moves forward only. If the selected goal is below her current
+    # experience, keep the current stage as the nearest attainable goal.
+    if current_stage in STAGE_INDEX and STAGE_INDEX[target] < STAGE_INDEX[current_stage]:
+        return current_stage
+    return target
+
+
+def enumerate_routes(start: str, goal: str) -> list[list[str]]:
+    """Enumerate every forward route between two stages in the small pathway graph."""
+    if start not in PATHWAY_GRAPH or goal not in PATHWAY_GRAPH:
+        return []
+    if STAGE_INDEX[goal] < STAGE_INDEX[start]:
+        goal = start
+
+    routes: list[list[str]] = []
+
+    def walk(stage: str, route: list[str]) -> None:
+        if stage == goal:
+            routes.append(route)
+            return
+        for edge in PATHWAY_GRAPH[stage]:
+            next_stage = edge["to"]
+            if STAGE_INDEX[next_stage] <= STAGE_INDEX[goal]:
+                walk(next_stage, [*route, next_stage])
+
+    walk(start, [start])
+    return routes
+
+
+def _route_score(route: list[str], best_by_stage: dict[str, dict[str, Any]], shortest: int) -> float:
+    fits = [float(best_by_stage[stage].get("fit", 0)) for stage in route if stage in best_by_stage]
+    average_fit = sum(fits) / len(fits) if fits else 0.0
+    gaps = len(route) - len(fits)
+    return average_fit - 18 * gaps - 2 * max(0, len(route) - shortest)
+
+
+def pathway(quiz: dict[str, Any], programs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Build the best feasible, program-backed route from the athlete's current stage to her goal."""
+    start = starting_stage(quiz.get("skill"), quiz.get("years_since_played"))
+    goal = goal_stage(quiz.get("goal_level"), quiz.get("competitions"), quiz.get("goal_text"), start)
+    routes = enumerate_routes(start, goal)
+    if not routes:
+        return []
+
+    # Import lazily: fit.py reuses constants from this module.
+    from app.fit import fit_catalog
+
+    matches = fit_catalog(quiz, programs)["matches"]
+    best_by_stage: dict[str, dict[str, Any]] = {}
+    for match in matches:
+        stage = match.get("stage")
+        if stage in PATHWAY_GRAPH and stage not in best_by_stage:
+            best_by_stage[stage] = match
+
+    shortest = min(map(len, routes))
+    route = min(
+        routes,
+        key=lambda candidate: (
+            -_route_score(candidate, best_by_stage, shortest),
+            len(candidate) - sum(stage in best_by_stage for stage in candidate),
+            len(candidate),
+            tuple(candidate),
+        ),
+    )
+
     steps = []
-    for level in LEVELS:
-        rank = SKILL_RANK[level]
-        status = "past" if rank < current else "current" if rank == current else "upcoming"
-        if target is not None and rank > target:
-            status = "beyond"
-        example = next(
-            (r for r in ranked if r["eligible"] and level in r["skill_levels"] and r["scope"] != "resource"), None
+    for index, stage in enumerate(route):
+        next_stage = route[index + 1] if index + 1 < len(route) else None
+        transition = next(
+            (edge for edge in PATHWAY_GRAPH[stage] if edge["to"] == next_stage),
+            None,
         )
+        match = best_by_stage.get(stage)
+        program = None if match is None else {
+            "id": match["id"],
+            "name": match["name"],
+            "fit": match.get("fit"),
+            "distance_mi": match.get("distance_mi"),
+            "cost_label": match.get("cost_label", ""),
+            "website": match.get("website", ""),
+        }
+        label = STAGE_LABELS[stage]
         steps.append({
-            "level": level,
-            "label": LEVEL_LABELS[level],
-            "status": status,
-            "is_goal": level == goal,
-            "example": {"id": example["id"], "name": example["name"]} if example else None,
+            "stage": stage,
+            "label": label,
+            "status": "current" if index == 0 else "upcoming",
+            "is_goal": stage == goal,
+            "program": program,
+            # Retain the former compact property for clients that only need a link and name.
+            "example": {"id": program["id"], "name": program["name"]} if program else None,
+            "gap": None if program else f"No eligible {label.lower()} program matches your answers yet.",
+            "weeks": transition["weeks"] if transition else None,
+            "ready_when": (
+                transition["ready_when"] if transition
+                else "This is your selected goal stage; confirm entry requirements with the program."
+            ),
         })
     return steps
 
@@ -199,7 +369,7 @@ def build_plan(quiz: dict[str, Any], rows: list[dict[str, Any]]) -> dict[str, An
         "weekly_programs": [_card_summary(w) for w in weekly],
         "step_up": step_up,
         "events": events,
-        "pathway": pathway(skill, quiz.get("goal_level"), ranked),
+        "pathway": pathway(quiz, rows),
         "top_matches": [_card_summary(r) for r in ranked if r["eligible"]][:8],
         "tips": tips,
     }
